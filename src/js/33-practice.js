@@ -30,6 +30,7 @@ function prGroups() {
     .map(([k, evs]) => ({
       t: k / 1000,
       evs,
+      bothHands: evs.some(e => e.hand) && evs.some(e => !e.hand),
       pcs: [...new Set(evs.map(e => ((e.m % 12) + 12) % 12))],
       ms: [...new Set(evs.map(e => e.m))].sort((a, b) => a - b)
     }));
@@ -264,7 +265,8 @@ function prLoop() {
   for (let i = 0; i < PR.tb.length; i += 4) s += PR.tb[i] * PR.tb[i];
   const rms = Math.sqrt(s / (PR.tb.length / 4));
   an.getFloatFrequencyData(PR.fb);
-  const r = PR.tr.feed(PR.fb, rms, performance.now());
+  const expected = PR.target?.bothHands ? PR.target.ms : undefined;
+  const r = PR.tr.feed(PR.fb, rms, performance.now(), expected);
   prLevel(rms / (r.gate * 5));
   if (r.finished?.length && PR.target === PR.G[PR.k]) {
     prHeard(r.finished);

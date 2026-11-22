@@ -261,22 +261,19 @@ def jouer_micro_bref(b, url):
     return pg
 
 
-def accord_wav():
-    """Trois attaques au micro : accord incomplet, accord avec une note en trop, accord exact."""
+def chords_wav(name, samples, attempts):
     import subprocess
     import tempfile
 
-    out = Path(tempfile.gettempdir()) / "musitone_accord.wav"
+    out = Path(tempfile.gettempdir()) / name
     p2 = ROOT / "public" / "piano2"
-    samples = {"E4": ("Ds4", 1), "A4": ("A4", 0), "F5": ("Ds5", 2), "B4": ("A4", 2)}
     cmd = ["ffmpeg", "-loglevel", "error", "-y"]
     filters = []
-    for delay, notes in [(2000, ["E4", "A4"]), (4200, ["E4", "A4", "F5", "B4"]), (6500, ["E4", "A4", "F5"])]:
+    for delay, notes in attempts:
         for note in notes:
-            sample, semitones = samples[note]
+            sample, semitones, gain = samples[note]
             i = len(filters)
             cmd += ["-i", str(p2 / f"{sample}v13.mp3")]
-            gain = 0.4 if note == "E4" else 0.32
             filters.append(
                 f"[{i}]asetrate=44100*{2 ** (semitones / 12):.8f},aresample=48000,"
                 f"atrim=duration=1.2,afade=t=out:st=0.9:d=0.3,volume={gain},adelay={delay}[n{i}]"
@@ -285,6 +282,45 @@ def accord_wav():
     filters.append(f"{inputs}amix=inputs={len(filters)}:normalize=0,apad=whole_dur=9")
     subprocess.run(cmd + ["-filter_complex", ";".join(filters), "-ac", "1", "-ar", "48000", str(out)], check=True)
     return str(out)
+
+
+def accord_wav():
+    return chords_wav(
+        "musitone_accord.wav",
+        {"E4": ("Ds4", 1, 0.4), "A4": ("A4", 0, 0.32), "F5": ("Ds5", 2, 0.32), "B4": ("A4", 2, 0.32)},
+        [(2000, ["E4", "A4"]), (4200, ["E4", "A4", "F5", "B4"]), (6500, ["E4", "A4", "F5"])],
+    )
+
+
+def deux_mains_wav():
+    return chords_wav(
+        "musitone_deux_mains.wav",
+        {"D3": ("C3", 2, 0.4), "G3": ("Fs3", 1, 0.32), "B3": ("A3", 2, 0.32),
+         "F4": ("Ds4", 2, 0.32), "G4": ("Fs4", 1, 0.32)},
+        [(2000, ["D3", "B3", "F4"]), (4200, ["D3", "G4", "B3", "F4"]), (6500, ["D3", "G3", "B3", "F4"])],
+    )
+
+
+def jouer_deux_mains(b, url):
+    """La basse doit être présente à la bonne octave pour valider un accord à deux mains."""
+    pg = new_page(b)
+    open_score(pg, url, "low.png")
+    assert pg.evaluate("new Set(__mt.sn().ev.filter(e => e.t === 0).map(e => !!e.hand)).size") == 2
+    pg.click("#dPrac")
+    assert pg.inner_text("#prNeed").split() == ["D3", "G3", "B3", "F4"]
+    for notes in [["B3", "D3", "F4"], ["B3", "D3", "F4", "G4"]]:
+        pg.wait_for_function(
+            """expected => {
+                const notes = Array.from(document.querySelectorAll('#prHeardN span'), n => n.textContent).sort();
+                return JSON.stringify(notes) === JSON.stringify(expected);
+            }""",
+            arg=notes,
+            timeout=9000,
+        )
+        assert pg.inner_text("#prPos").startswith("1 /")
+    pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=9000)
+    assert sorted(pg.locator("#prHeardN span").all_text_contents()) == ["B3", "D3", "F4", "G3"]
+    return pg
 
 
 def jouer_accord(b, url):
@@ -312,10 +348,11 @@ def jouer_accord(b, url):
 
 
 jouer_accord.mic = accord_wav
+jouer_deux_mains.mic = deux_mains_wav
 
 jouer_micro.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_accord]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_accord, jouer_deux_mains]
 
 
 def main():

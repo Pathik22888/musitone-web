@@ -69,7 +69,7 @@ function pitchScore(pk, m) {
 }
 
 /* notes entendues (numéros MIDI, la plus forte d'abord), au plus `max` notes */
-function pitchDetect(db, sr, n, max = 8) {
+function pitchDetect(db, sr, n, max = 8, expected = []) {
   const pk = pitchPeaks(db, sr, n);
   // Un claquement répartit son énergie sur beaucoup de pics. Sans ce filtre,
   // plusieurs candidats peuvent finir par expliquer assez de bruit pour passer.
@@ -95,6 +95,12 @@ function pitchDetect(db, sr, n, max = 8) {
     }
     if (it && (!best || best.s < Math.min(PITCH.keep * first, PITCH.abs))) best = fallback;
     if (!best || best.s <= 0) break;
+    // Une harmonique forte peut masquer la basse. La partition départage les
+    // octaves si la note attendue possède aussi une fondamentale mesurable.
+    if (!expected.includes(best.m) && expected.includes(best.m - 12) && !out.some(o => o.m === best.m - 12)) {
+      const lower = pitchScore(pk, best.m - 12);
+      if (lower.fundamental >= 0.065 && lower.s >= best.s * 0.6) best = lower;
+    }
     if (it === 0) first = best.s;
     out.push({m: best.m, s: best.s});
     for (const j of best.used) pk[j].a *= 0.15;
@@ -119,7 +125,7 @@ function pitchTracker(sr, n) {
     last = -1e9,
     ev = null;
   return {
-    feed(db, rms, now) {
+    feed(db, rms, now, expected) {
       const lin = new Float32Array(L);
       let tot = 1e-12;
       for (let k = 0; k < L; k++) tot += lin[k] = Math.pow(10, db[i0 + k] / 20);
@@ -156,7 +162,7 @@ function pitchTracker(sr, n) {
         for (let k = 0; k < L; k++) ev.acc[k] += Math.max(0, lin[k] - ev.ref[k]);
         for (let k = 0; k < L; k++) out[i0 + k] = 20 * Math.log10(ev.acc[k] / ev.c + 1e-12);
         if (ev.c >= 2) {
-          const notes = pitchDetect(out, sr, n).map(p => p.m);
+          const notes = pitchDetect(out, sr, n, 8, expected).map(p => p.m);
           // Garder la dernière estimation confirmée sur deux analyses
           // pour les attaques dont la fin devient indétectable.
           if (notes.length && notes.length === ev.previous.length && notes.every(m => ev.previous.includes(m))) {
