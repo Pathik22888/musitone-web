@@ -2219,6 +2219,10 @@ document.addEventListener("click",e=>{const a=document.querySelector(".adv");if(
 $("revBtn").onclick=()=>{reviewing=true;document.body.classList.add("reviewing");const it=list();if(it.length)select("sus",it[0],null,null,{nav:1})};
 $("undo").onclick=()=>{const h=hist.pop();if(!h)return;const pg=pages[cur];pg.notes=h.notes;pg.sus=h.sus;h.notes.forEach((n,i)=>{n.ov=h.ov[i];if(h.ns&&h.ns[i])n.s=h.ns[i];const o=h.np&&h.np[i];if(o){for(const k in n){const v=n[k];if((v===null||typeof v!=="object"&&typeof v!=="function")&&!(k in o))delete n[k]}Object.assign(n,o)}});pg.staves.forEach((s,i)=>{if(h.clefs)s.clefs=h.clefs[i];s.clefs=h.clef[i].map(k=>Object.assign({},k))});if(h.acc){pg.acc=h.acc;h.acc.forEach((a,i)=>{[a.Lov,a.skip,a.del]=h.accS[i]})}$("undo").disabled=!hist.length;refresh();if(sel)updPal()};
 $("stage").addEventListener("click",e=>{if(Date.now()-lastPinch<450)return;if(!$("coach").hidden)coachDone();
+  /* « Jouer » : toucher la partition ne corrige pas, il place l'élève à cet endroit */
+  if(typeof PR!=="undefined"&&PR.on){e.stopPropagation();e.preventDefault();const pg=pages[cur],S=songNow();if(pg&&S&&S.sys&&S.sys.length&&PR.G.length){const r=$("cv").getBoundingClientRect(),x=(e.clientX-r.left)/r.width*pg.W,y=(e.clientY-r.top)/r.height*pg.H;
+    let ys=null,bd=1e9;for(const q of S.sys){const dd=y<q.top?q.top-y:y>q.bot?y-q.bot:0;if(dd<bd){bd=dd;ys=q}}
+    if(ys&&bd<6*(ys.d||12)){const k=ys.keys;let t=k[0][0];for(let i=0;i<k.length;i++){if(k[i][1]<=x+(ys.d||12))t=k[i][0];else break}let j=PR.G.findIndex(g=>g.t>=t-1e-6);if(j<0)j=PR.G.length-1;PR.k=j;PR.tap=null;prShow()}}return}
   /* pendant l'écoute : toucher la partition fait repartir la lecture à cet endroit */
   if((PLAY||document.body.classList.contains("plOpen"))&&!CLEFMODE&&!e.target.closest(".clef")){const pg=pages[cur],S=songNow();if(pg&&S&&S.sys&&S.sys.length){const r=$("cv").getBoundingClientRect(),x=(e.clientX-r.left)/r.width*pg.W,y=(e.clientY-r.top)/r.height*pg.H;
     let ys=null,bd=1e9;for(const q of S.sys){const dd=y<q.top?q.top-y:y>q.bot?y-q.bot:0;if(dd<bd){bd=dd;ys=q}}
