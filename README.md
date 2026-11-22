@@ -33,5 +33,3 @@ git commit -am "…" && git push    # 4. publier
 
 Chaque envoi sur la branche `main` met le site à jour automatiquement.
 
-Transition : tant que les copies à la racine du dépôt existent, `build.py` y recopie aussi
-`index.html`, pour que le site marche quel que soit le dossier de sortie réglé.

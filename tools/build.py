@@ -72,9 +72,6 @@ def main():
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(assemble(t), encoding="utf-8")
         print(f"{t:9} -> {out.relative_to(ROOT)}  ({out.stat().st_size // 1024} Ko)")
-        if t == "web" and (ROOT / "index.html").exists():
-            # Transition : tant que Cloudflare sert la racine du dépôt, on y garde une copie.
-            (ROOT / "index.html").write_bytes(out.read_bytes())
 
 
 if __name__ == "__main__":
