@@ -3156,13 +3156,9 @@ function prOpen(){if(!pages[cur]||!pages[cur].notes){toast("Ouvrez d'abord une p
   let P=$("prPanel");if(!P){P=document.createElement("div");P.id="prPanel";P.className="prPanel";P.innerHTML=`<div class="prTop"><span class="prMic" id="prMic"><i></i><b id="prMicT">Micro…</b></span><span class="prPos" id="prPos"></span><button type="button" id="prX" class="prX">Terminé</button></div>
     <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div></div>
     <div class="prHands" id="prHands"><button data-h="both" class="cur">Les deux mains</button><button data-h="r">Main droite</button><button data-h="l">Main gauche</button></div>
-    <div class="prKeys" id="prKeys"></div>
     <div class="prNav"><button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button><button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button></div>`;document.body.appendChild(P);
-    const wk=[0,2,4,5,7,9,11],bk=[[1,0],[3,1],[6,3],[8,4],[10,5]];$("prKeys").innerHTML=wk.map(pc=>`<button class="w" data-pc="${pc}" style="--c:${prColor(pc)}"><span>${PCN[pc]}</span></button>`).join("")+bk.map(([pc,i])=>`<button class="b" data-pc="${pc}" style="left:calc(${(i+1)*100/7}% - 6.5%)"></button>`).join("");
-    $("prKeys").onpointerdown=e=>{const b=e.target.closest("[data-pc]");if(!b)return;e.preventDefault();const pc=+b.dataset.pc;b.classList.add("hit");setTimeout(()=>b.classList.remove("hit"),160);
-      try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();AC.resume();const o=AC.createGain();o.gain.value=.5;o.connect(AC.destination);const g=PR.G[PR.k],ev=g&&g.evs.find(x=>((x.m%12)+12)%12===pc);pianoNote(AC,o,AC.currentTime+.01,ev?ev.m:60+pc,.6,.3)}catch(x){}
-      prTap(pc)};
-    $("prX").onclick=prClose;$("prPrev").onclick=()=>{PR.k=Math.max(0,PR.k-1);PR.tap=null;prShow()};$("prSkip").onclick=()=>prNext(false);
+
+    $("prX").onclick=prClose;$("prMic").onclick=()=>{if(!PR.an)prMicStart()};$("prPrev").onclick=()=>{PR.k=Math.max(0,PR.k-1);PR.tap=null;prShow()};$("prSkip").onclick=()=>prNext(false);
     $("prHands").onclick=e=>{const b=e.target.closest("[data-h]");if(!b)return;PR.hand=b.dataset.h;$("prHands").querySelectorAll("button").forEach(x=>x.classList.toggle("cur",x===b));const t=PR.G[PR.k]?PR.G[PR.k].t:0;PR.G=prGroups();PR.k=Math.max(0,PR.G.findIndex(g=>g.t>=t-1e-6));prShow()}}
   P.hidden=false;prShow();prMicStart()}
 function prClose(){PR.on=false;document.body.classList.remove("practice");const P=$("prPanel");if(P)P.hidden=true;cancelAnimationFrame(PR.raf);try{PR.st&&PR.st.getTracks().forEach(t=>t.stop())}catch(e){}PR.st=null;PR.an=null;try{drawMarks()}catch(e){}}
@@ -3172,18 +3168,17 @@ async function prNext(good){if(good)PR.ok++;PR.tap=null;PR.k++;if(PR.k>=PR.G.len
     toast(`Bravo ! Morceau terminé (${PR.ok} sur ${PR.G.length} du premier coup)`);PR.k=0;PR.ok=0}prShow()}
 function prShow(){const g=PR.G[PR.k];if(!g)return;$("prPos").textContent=`${PR.k+1} / ${PR.G.length}`+(pages.length>1?` · page ${cur+1}`:"");
   $("prNeed").innerHTML=g.pcs.map(pc=>`<span class="${PR.tap&&PR.tap.has(pc)?"done":""}" style="--c:${prColor(pc)}">${PCN[pc]}</span>`).join("");
-  $("prKeys").querySelectorAll("[data-pc]").forEach(b=>b.classList.toggle("want",g.pcs.includes(+b.dataset.pc)));
   try{drawMarks();const c=$("ov").getContext("2d"),pg=pages[cur];for(const e of g.evs){const n=e.n;if(!n||!n.s)continue;const d=n.s.d;c.save();c.lineWidth=Math.max(4,.34*d);c.strokeStyle=PAL[letterOf(n)][1];c.shadowColor=PAL[letterOf(n)][1];c.shadowBlur=1.4*d;c.beginPath();c.ellipse(n.x,n.y,1.35*d,1.05*d,-.35,0,Math.PI*2);c.stroke();c.restore()}
     const S=songNow(),cu=cursorAt(S,g.t);if(cu){c.save();c.fillStyle="rgba(0,200,224,.12)";c.fillRect(cu.x-1.6*cu.y.d,cu.y.top,3.2*cu.y.d,cu.y.bot-cu.y.top);c.restore();
       const r=$("cv").getBoundingClientRect(),v=$("view"),vr=v.getBoundingClientRect(),sx=r.left+cu.x/pg.W*r.width,y0=r.top+cu.y.top/pg.H*r.height,y1=r.top+cu.y.bot/pg.H*r.height,pb=$("prPanel").getBoundingClientRect().top;
       if(sx<vr.left+30||sx>vr.right-40)v.scrollBy({left:sx-vr.left-vr.width*.3,behavior:"smooth"});if(y0<vr.top+10||y1>Math.min(vr.bottom,pb)-20)v.scrollBy({top:y0-vr.top-40,behavior:"smooth"})}}catch(e){}}
 /* micro : on écoute le piano, on repère chaque nouvelle attaque, puis on regarde quelles notes (do, ré, mi…) sonnent */
 async function prMicStart(){const set=(t,cl)=>{$("prMicT").textContent=t;$("prMic").className="prMic "+(cl||"")};
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){set("Micro indisponible · touchez les couleurs ci-dessous","off");return}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){set("Micro indisponible sur cet appareil","off");return}
   set("Autorisez le micro…");try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();await AC.resume();
     const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});if(!PR.on){st.getTracks().forEach(t=>t.stop());return}
     PR.st=st;const src=AC.createMediaStreamSource(st),an=AC.createAnalyser();an.fftSize=8192;an.smoothingTimeConstant=0;src.connect(an);PR.an=an;PR.fb=new Float32Array(an.frequencyBinCount);PR.tb=new Float32Array(an.fftSize);PR.rh=[];PR.acc=null;set("J'écoute votre piano","live");prLoop()}
-  catch(e){set((e&&e.name==="NotAllowedError"?"Micro bloqué ici":"Micro indisponible")+" · touchez les couleurs ci-dessous","off")}}
+  catch(e){set(e&&e.name==="NotAllowedError"?"Micro refusé · touchez ici pour réessayer":"Micro indisponible · touchez ici pour réessayer","off")}}
 function prLoop(){if(!PR.on||!PR.an)return;PR.raf=requestAnimationFrame(prLoop);const an=PR.an;an.getFloatTimeDomainData(PR.tb);let s=0;for(let i=0;i<PR.tb.length;i+=4)s+=PR.tb[i]*PR.tb[i];const rms=Math.sqrt(s/(PR.tb.length/4));
   const h=PR.rh;h.push(rms);if(h.length>12)h.shift();const lo=Math.min(...h.slice(0,-2));PR.floor=PR.floor==null?rms:Math.min(PR.floor*1.002+1e-5,Math.max(rms,PR.floor*.98));
   const now=performance.now(),gate=Math.max(.006,PR.floor*3);
