@@ -9,7 +9,7 @@ import {execFileSync} from "child_process";
 import {fileURLToPath} from "url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const code = fs.readFileSync(path.join(ROOT, "src/js/34-pitch.js"), "utf8");
-const {pitchTracker, PITCH, pitchPeaks, pitchScore} = new Function(code + "\nreturn {pitchTracker, PITCH, pitchPeaks, pitchScore};")();
+const {pitchTracker, PITCH, pitchPeaks, pitchScore, pitchOffset} = new Function(code + "\nreturn {pitchTracker, PITCH, pitchPeaks, pitchScore, pitchOffset};")();
 for (const a of process.argv.slice(2)) { const [k, v] = a.split("="); if (v) PITCH[k] = +v; }
 
 const SR = 48000, N = 8192, HOP = 800; // 60 images/s comme requestAnimationFrame
@@ -188,6 +188,48 @@ for (const [played, gain, target = gTarget] of gCases) {
 }
 console.log(`Sol en accord, versions exactes et refus : ${gChordsOK}/${gCases.length}`);
 seed = seedBeforeG;
+// La seconde FFT reproduit l'analyseur d'attaque du navigateur.
+const shortSize = 2048;
+const shortWin = new Float32Array(shortSize).map((_, i) => WIN[i * N / shortSize]);
+function shortSpectrum(x, end) {
+  const re = new Float64Array(shortSize), im = new Float64Array(shortSize);
+  for (let i = 0; i < shortSize; i++) re[i] = (x[end - shortSize + i] || 0) * shortWin[i];
+  fft(re, im);
+  return Float32Array.from({length: shortSize / 2}, (_, i) => 20 * Math.log10(Math.hypot(re[i], im[i]) / shortSize + 1e-12));
+}
+
+const quickSequences = [[60, 63, 66, 69, 72], [72, 69, 66, 63, 60], [60, 60, 63, 63, 60], [48, 51, 54, 57, 60]];
+let quickOK = 0;
+const seedBeforeQuick = seed;
+for (const score of quickSequences) {
+  const parts = score.map((m, i) => [by[m], Math.round(SR * (0.4 + i * 0.18)), 0.8]);
+  const x = mix(parts, SR * 2);
+  const tracker = pitchTracker(SR, N);
+  const heard = [];
+  let pos = 0;
+  for (let end = N; end < x.length; end += HOP) {
+    const o = tracker.feed(spectrum(x, end), rms(x, end), end * 1000 / SR,
+      pos < score.length ? [score[pos]] : undefined, shortSpectrum(x, end));
+    if (o.finished?.length) {
+      heard.push(o.finished);
+      if (o.finished.length === 1 && o.finished[0] === score[pos]) pos++;
+    }
+  }
+  if (pos === score.length && heard.length === score.length) quickOK++;
+  else bad.push(`notes à 180 ms ${score.map(nm).join("-")} -> ${heard.map(notes => notes.map(nm).join("+")).join("-")}`);
+}
+seed = seedBeforeQuick;
+console.log(`Passages à 180 ms, dont des notes répétées : ${quickOK}/${quickSequences.length}`);
+
+let tuningOK = 0;
+for (const cents of [-24, 0, 22]) {
+  const f = 440 * 2 ** (cents / 1200);
+  const wave = Float32Array.from({length: N}, (_, i) => 0.2 * Math.sin(2 * Math.PI * f * i / SR));
+  const got = pitchOffset(spectrum(wave, N), SR, N, 69, 69);
+  if (got !== null && Math.abs(got - cents) <= 2) tuningOK++;
+  else bad.push(`justesse A4 à ${cents} ¢ -> ${got}`);
+}
+console.log(`Indication de hauteur : ${tuningOK}/3`);
 // note tenue puis nouvelle note par-dessus : 2 attaques attendues, la 2e reconnue
 let sok = 0, stot = 0;
 for (const [a, b] of [[60, 64 - 1], [57, 60], [48, 54], [69, 72], [63, 66], [60, 60], [45, 45], [72, 60], [54, 51]]) {
@@ -228,6 +270,6 @@ console.log(`Bruits sans note ignorés : ${nok}/${bursts.length}`);
 console.log(`Avec réverbération : ${rok}/${rtot}`);
 if (process.argv.includes("-v") || bad.length) console.log(bad.join("\n"));
 fs.rmSync(tmp, {recursive: true});
-const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && gNotesOK === 6 && gChordsOK === gCases.length && sok === stot && rok === rtot && nok === bursts.length;
+const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && gNotesOK === 6 && gChordsOK === gCases.length && quickOK === quickSequences.length && tuningOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
 console.log(pass ? "OK" : "ÉCHEC");
 process.exit(pass ? 0 : 1);

@@ -66,7 +66,12 @@ function prOpen() {
     P.id = "prPanel";
     P.className = "prPanel";
     P.innerHTML = `<div class="prTop"><span class="prMic" id="prMic"><i></i><b id="prMicT">Micro…</b></span><span class="prPos" id="prPos"></span><button type="button" id="prX" class="prX">Terminé</button></div>
-    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div><div class="prHeard" id="prHeard"><small>J'entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div><i class="prLvl"><u id="prLvl"></u></i></div></div>
+    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div><div class="prHeard" id="prHeard"><small>J'entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div></div>
+    <div id="prTune" class="prTune">
+      <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>
+      <div class="prTuneScale" aria-hidden="true"><i></i><b id="prTuneMark" hidden></b></div>
+      <div class="prTuneLabels" aria-hidden="true"><span>Grave</span><span>Juste</span><span>Aigu</span></div>
+    </div>
     <div class="prHands" id="prHands"><button data-h="both" class="cur">Les deux mains</button><button data-h="r">Main droite</button><button data-h="l">Main gauche</button></div>
     <div class="prNav"><button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button><button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button></div>`;
     document.body.appendChild(P);
@@ -112,6 +117,7 @@ function prClose() {
   } catch (e) {}
   PR.st = null;
   PR.an = null;
+  PR.onset = null;
   try {
     drawMarks();
   } catch (e) {}
@@ -238,12 +244,20 @@ async function prMicStart() {
       an = AC.createAnalyser();
     an.fftSize = 8192;
     an.smoothingTimeConstant = 0;
+    const onset = AC.createAnalyser();
+    onset.fftSize = 2048;
+    onset.smoothingTimeConstant = 0;
     src.connect(an);
+    src.connect(onset);
+    PR.onset = onset;
+    PR.onsetBins = new Float32Array(onset.frequencyBinCount);
     PR.an = an;
     PR.fb = new Float32Array(an.frequencyBinCount);
     PR.tb = new Float32Array(an.fftSize);
     PR.tr = pitchTracker(AC.sampleRate, an.fftSize);
     PR.target = null;
+    PR.tune = null;
+    prTuning(null);
     set("J'écoute votre piano", "live");
     prLoop();
   } catch (e) {
@@ -264,16 +278,27 @@ function prLoop() {
   for (let i = 0; i < PR.tb.length; i += 4) s += PR.tb[i] * PR.tb[i];
   const rms = Math.sqrt(s / (PR.tb.length / 4));
   an.getFloatFrequencyData(PR.fb);
-  const notes = PR.target?.ms;
-  const expected = notes?.length > 1 ? notes : undefined;
-  const r = PR.tr.feed(PR.fb, rms, performance.now(), expected);
-  prLevel(rms / (r.gate * 5));
+  PR.onset.getFloatFrequencyData(PR.onsetBins);
+  const now = performance.now();
+  const expected = PR.G[PR.k]?.ms;
+  const r = PR.tr.feed(PR.fb, rms, now, expected, PR.onsetBins);
   if (r.finished?.length && PR.target === PR.G[PR.k]) {
+    const heard = r.finished[0];
+    PR.tune = {heard, reference: expected?.length === 1 ? expected[0] : heard, until: now + 2500};
+    prTuning(null);
     prHeard(r.finished);
     if (prJudge(r.finished)) prNext(true);
     else prWrong();
   }
   if (r.hit) PR.target = PR.G[PR.k];
+  const tune = PR.tune;
+  if (tune && now >= tune.until) {
+    PR.tune = null;
+    prTuning(null);
+  } else if (tune && rms > r.gate) {
+    const cents = pitchOffset(PR.fb, AC.sampleRate, an.fftSize, tune.heard, tune.reference);
+    if (cents !== null) prTuning(cents, tune.heard);
+  }
 }
 /* affiche ce que le micro capte : les notes exactes (avec l'octave), dans leur couleur.
    Pleine = bonne note ; contour pointillé = bonne couleur mais pas la bonne octave ; contour = autre note */
@@ -295,9 +320,23 @@ function prHeard(notes) {
   clearTimeout(PR.heardT);
   PR.heardT = setTimeout(() => h.classList.remove("on"), 2500);
 }
-function prLevel(x) {
-  const l = $("prLvl");
-  if (l) l.style.transform = `scaleX(${Math.max(0, Math.min(1, x)).toFixed(3)})`;
+function prTuning(cents, heard) {
+  const marker = $("prTuneMark"),
+    value = $("prTuneValue");
+  if (cents === null) {
+    value.textContent = "—";
+    marker.hidden = true;
+    return;
+  }
+  const rounded = Math.round(cents);
+  const label = Math.abs(rounded) <= 5 ? "Juste" : rounded < 0 ? "Trop grave" : "Trop aigu";
+  const note = PCN[heard % 12] + (Math.floor(heard / 12) - 1);
+  const offset = rounded > 0 ? "+" + rounded : String(rounded);
+  const text = `${note} · ${label} (${offset} ¢)`;
+  if (value.textContent !== text) value.textContent = text;
+  marker.style.left = Math.max(0, Math.min(100, 50 + cents)) + "%";
+  marker.classList.toggle("centered", Math.abs(rounded) <= 5);
+  marker.hidden = false;
 }
 /* Toutes les notes de l'accord doivent être présentes, à la bonne octave. */
 function prJudge(notes) {

@@ -233,6 +233,62 @@ def jouer_micro(b, url):
     return pg
 
 
+def justesse_wav():
+    cents = 22
+    return chords_wav(
+        "musitone_justesse.wav",
+        {"E4": ("Ds4", 1 + cents / 100, 0.4)},
+        [(2000, ["E4"])],
+    )
+
+
+def jouer_justesse(b, url):
+    """Un E4 aigu affiche une valeur positive et un repère à droite."""
+    pg = new_page(b)
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    pg.click("#prSkip")
+    assert pg.inner_text("#prNeed").split() == ["E4"]
+    pg.wait_for_function("document.querySelector('#prTuneValue').textContent.includes('Trop aigu')", timeout=6000)
+    text = pg.inner_text("#prTuneValue")
+    assert text.startswith("E4") and "(+" in text, text
+    assert float(pg.locator("#prTuneMark").evaluate("marker => parseFloat(marker.style.left)")) > 50
+    assert pg.inner_text("#prPos").startswith("3 /")
+    return pg
+
+
+def rapide_wav():
+    notes = ["C4", "Ds4", "Fs4", "A4", "C5"]
+    return chords_wav(
+        "musitone_rapide.wav",
+        {note: (note, 0, 0.4) for note in notes},
+        [(2000 + i * 180, [note]) for i, note in enumerate(notes)],
+    )
+
+
+def jouer_rapide(b, url):
+    """Cinq notes espacées de 180 ms avancent de cinq positions."""
+    pg = new_page(b)
+
+    def excerpt(route):
+        response = route.fetch()
+        html = response.text()
+        start = html.index("function prGroups()")
+        end = html.index("const prName", start)
+        body = html[start:end]
+        body = body.replace(".map(([k, evs]) => ({", ".map(([k, evs], i) => ({")
+        body = body.replace("ms: [...new Set", "ms: i < 5 ? [[60, 63, 66, 69, 72][i]] : [...new Set")
+        route.fulfill(response=response, body=html[:start] + body + html[end:])
+
+    pg.route("**/test.html", excerpt)
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    assert pg.inner_text("#prNeed").split() == ["C4"]
+    pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('6 /')", timeout=6500)
+    assert pg.inner_text("#prHeardN").split() == ["C5"]
+    return pg
+
+
 def jouer_micro_bref(b, url):
     """Une note reconnue sur plusieurs images fait avancer malgré une fin de signal incertaine."""
     pg = new_page(b)
@@ -383,9 +439,11 @@ jouer_accord.mic = accord_wav
 jouer_deux_mains.mic = deux_mains_wav
 jouer_octave_mains.mic = octave_mains_wav
 
+jouer_rapide.mic = rapide_wav
+jouer_justesse.mic = justesse_wav
 jouer_micro.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_accord, jouer_deux_mains, jouer_octave_mains]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains]
 
 
 def main():

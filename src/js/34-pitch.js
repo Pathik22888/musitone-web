@@ -202,7 +202,55 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
 /* Suivi en continu : repère chaque nouvelle attaque (énergie qui apparaît sur de nouvelles fréquences),
    puis reconnaît la note sur ce qui vient d'apparaître seulement. Une note tenue ne relance rien,
    et la note précédente qui résonne encore n'est pas reprise. Indépendant de la cadence d'images (60 ou 120 Hz). */
+function fastAttackDetector() {
+  const history = [];
+  let ready = true, last = -1e9;
+  return (db, now, allowed) => {
+    const bins = new Float32Array(Math.min(db.length, 256));
+    for (let i = 2; i < bins.length; i++) bins[i] = Math.pow(10, db[i] / 20);
+    const previous = history.filter(frame => frame.t <= now - 18);
+    let flux = 0, total = 1e-12, attack = false;
+    if (previous.length) {
+      for (let i = 2; i < bins.length; i++) {
+        let base = 1e-12;
+        for (const frame of previous) base = Math.max(base, frame.bins[i]);
+        total += bins[i];
+        flux += Math.max(0, bins[i] - base * 1.45);
+      }
+      flux /= total;
+      if (flux < 0.1) ready = true;
+      const delay = now - last;
+      const threshold = last >= 0 && delay > 135 ? 0.155 : 0.20;
+      attack = allowed && ready && flux > threshold && delay > 90;
+      if (attack) { last = now; ready = false; }
+    }
+    history.push({t: now, bins});
+    while (history.length && history[0].t < now - 65) history.shift();
+    return attack;
+  };
+}
+
+/* Estimation de la fondamentale par interpolation du pic spectral. */
+function pitchOffset(db, sr, n, midi, reference) {
+  const bw = sr / n;
+  const target = 440 * 2 ** ((midi - 69) / 12);
+  const first = Math.max(2, Math.floor(target * 2 ** (-65 / 1200) / bw));
+  const last = Math.min(db.length - 2, Math.ceil(target * 2 ** (65 / 1200) / bw));
+  let peak = -1;
+  for (let i = first; i <= last; i++) {
+    if (db[i] >= -80 && db[i] >= db[i - 1] && db[i] > db[i + 1] && (peak < 0 || db[i] > db[peak])) peak = i;
+  }
+  if (peak < 0) return null;
+  const left = db[peak - 1], mid = db[peak], right = db[peak + 1];
+  const curve = left - 2 * mid + right;
+  const shift = Number.isFinite(curve) && curve < 0 ? (0.5 * (left - right)) / curve : 0;
+  const f = (peak + Math.max(-0.5, Math.min(0.5, shift))) * bw;
+  const cents = 1200 * Math.log2(f / target);
+  return Math.abs(cents) <= 65 ? cents + (midi - reference) * 100 : null;
+}
+
 function pitchTracker(sr, n) {
+  const fastAttack = fastAttackDetector();
   const bw = sr / n,
     i0 = Math.max(2, Math.floor(PITCH.fmin / bw)),
     i1 = Math.min(n / 2 - 2, Math.ceil(PITCH.fmax / bw)),
@@ -213,7 +261,7 @@ function pitchTracker(sr, n) {
     last = -1e9,
     ev = null;
   return {
-    feed(db, rms, now, expected) {
+    feed(db, rms, now, expected, short) {
       const lin = new Float32Array(L);
       let tot = 1e-12;
       for (let k = 0; k < L; k++) tot += lin[k] = Math.pow(10, db[i0 + k] / 20);
@@ -230,9 +278,14 @@ function pitchTracker(sr, n) {
         }
         flux /= tot;
       }
-      const hit = rms > gate && flux > PITCH.flux && now - last > 220;
+      // Les notes sous E2 ont besoin d'une fenêtre plus longue.
+      const fast = expected?.length === 1 && expected[0] >= 40 && !!short;
+      const quickHit = short && fastAttack(short, now, fast && rms > gate);
+      const hit = (quickHit && now - last > 90) || (rms > gate && flux > PITCH.flux && now - last > 220);
+      const fastDone = ev?.fast && ev.notes.length === 1 && ev.notes[0] === expected?.[0] &&
+        ev.previous.length === 1 && ev.previous[0] === ev.notes[0] && now - ev.t >= 95;
       let finished = null;
-      if (ev && !ev.done && (hit || now - ev.t > 260)) {
+      if (ev && !ev.done && (hit || fastDone || now - ev.t > 260)) {
         ev.done = true;
         if (ev.previous.length) ev.notes = ev.previous;
         finished = ev.notes;
@@ -240,17 +293,25 @@ function pitchTracker(sr, n) {
       if (hit) {
         const ref = new Float32Array(L);
         for (const h of old) for (let k = 0; k < L; k++) if (h.lin[k] > ref[k]) ref[k] = h.lin[k];
-        ev = {t: now, ref, acc: new Float32Array(L), c: 0, previous: [], notes: [], done: false};
+        ev = {t: now, fast, ref, acc: new Float32Array(L), c: 0, previous: [], notes: [], done: false};
         last = now;
       }
       hist.push({t: now, lin});
       while (hist.length && hist[0].t < now - 200) hist.shift();
-      if (ev && now - ev.t >= 45 && now - ev.t <= 260) {
+      if (ev && !ev.done && now - ev.t >= (ev.fast ? 55 : 45)) {
         ev.c++;
         for (let k = 0; k < L; k++) ev.acc[k] += Math.max(0, lin[k] - ev.ref[k]);
         for (let k = 0; k < L; k++) out[i0 + k] = 20 * Math.log10(ev.acc[k] / ev.c + 1e-12);
         if (ev.c >= 2) {
-          const notes = pitchDetect(out, sr, n, 8, expected).map(p => p.m);
+          const found = pitchDetect(out, sr, n, 8, expected);
+          // La soustraction d'un son précédent peut laisser des pics aigus
+          // isolés. Vérifier ceux-ci aussi dans le spectre reçu.
+          const peaks = ev.fast && found.length > 1 ? pitchPeaks(db, sr, n) : null;
+          const main = found[0]?.m;
+          const notes = found.filter(p => !peaks || p.m < 84 || p.m < main + 12 ||
+            quietNoteEvidence(peaks, p.m, [main], bw) ||
+            (p.m === main + 12 && octaveEvidence(peaks, main, [], bw, false))
+          ).map(p => p.m);
           // Garder la dernière estimation confirmée sur deux analyses
           // pour les attaques dont la fin devient indétectable.
           if (notes.length && notes.length === ev.previous.length && notes.every(m => ev.previous.includes(m))) {

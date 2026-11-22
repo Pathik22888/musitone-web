@@ -5831,21 +5831,52 @@ body.practice #steps3 {
   background: var(--c);
   color: #151a3b;
 }
-.prLvl {
-  display: block;
-  width: 72px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
+.prTune {
+  display: grid;
+  gap: 5px;
+  color: #bbc4e8;
+  font-size: 11px;
 }
-.prLvl u {
-  display: block;
+.prTuneInfo,
+.prTuneLabels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.prTuneInfo {
+  font-weight: 700;
+}
+#prTuneValue {
+  font-variant-numeric: tabular-nums;
+}
+.prTuneScale {
+  position: relative;
+  height: 10px;
+  margin: 0 5px;
+  border-radius: 5px;
+  background: #303858;
+}
+.prTuneScale i,
+.prTuneScale b {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.prTuneScale i {
+  width: 10%;
   height: 100%;
-  background: #35d66b;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.08s linear;
+  background: #28644e;
+}
+.prTuneScale b {
+  top: -2px;
+  width: 7px;
+  height: 14px;
+  border-radius: 4px;
+  background: #f6cf75;
+  transition: left 0.08s linear;
+}
+.prTuneScale b.centered {
+  background: #61e6a0;
 }
 .prNeed span.done {
   opacity: 0.35;
@@ -20627,7 +20658,12 @@ function prOpen() {
     P.id = "prPanel";
     P.className = "prPanel";
     P.innerHTML = `<div class="prTop"><span class="prMic" id="prMic"><i></i><b id="prMicT">Micro…</b></span><span class="prPos" id="prPos"></span><button type="button" id="prX" class="prX">Terminé</button></div>
-    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div><div class="prHeard" id="prHeard"><small>J'entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div><i class="prLvl"><u id="prLvl"></u></i></div></div>
+    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div><div class="prHeard" id="prHeard"><small>J'entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div></div>
+    <div id="prTune" class="prTune">
+      <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>
+      <div class="prTuneScale" aria-hidden="true"><i></i><b id="prTuneMark" hidden></b></div>
+      <div class="prTuneLabels" aria-hidden="true"><span>Grave</span><span>Juste</span><span>Aigu</span></div>
+    </div>
     <div class="prHands" id="prHands"><button data-h="both" class="cur">Les deux mains</button><button data-h="r">Main droite</button><button data-h="l">Main gauche</button></div>
     <div class="prNav"><button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button><button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button></div>`;
     document.body.appendChild(P);
@@ -20673,6 +20709,7 @@ function prClose() {
   } catch (e) {}
   PR.st = null;
   PR.an = null;
+  PR.onset = null;
   try {
     drawMarks();
   } catch (e) {}
@@ -20799,12 +20836,20 @@ async function prMicStart() {
       an = AC.createAnalyser();
     an.fftSize = 8192;
     an.smoothingTimeConstant = 0;
+    const onset = AC.createAnalyser();
+    onset.fftSize = 2048;
+    onset.smoothingTimeConstant = 0;
     src.connect(an);
+    src.connect(onset);
+    PR.onset = onset;
+    PR.onsetBins = new Float32Array(onset.frequencyBinCount);
     PR.an = an;
     PR.fb = new Float32Array(an.frequencyBinCount);
     PR.tb = new Float32Array(an.fftSize);
     PR.tr = pitchTracker(AC.sampleRate, an.fftSize);
     PR.target = null;
+    PR.tune = null;
+    prTuning(null);
     set("J'écoute votre piano", "live");
     prLoop();
   } catch (e) {
@@ -20825,16 +20870,27 @@ function prLoop() {
   for (let i = 0; i < PR.tb.length; i += 4) s += PR.tb[i] * PR.tb[i];
   const rms = Math.sqrt(s / (PR.tb.length / 4));
   an.getFloatFrequencyData(PR.fb);
-  const notes = PR.target?.ms;
-  const expected = notes?.length > 1 ? notes : undefined;
-  const r = PR.tr.feed(PR.fb, rms, performance.now(), expected);
-  prLevel(rms / (r.gate * 5));
+  PR.onset.getFloatFrequencyData(PR.onsetBins);
+  const now = performance.now();
+  const expected = PR.G[PR.k]?.ms;
+  const r = PR.tr.feed(PR.fb, rms, now, expected, PR.onsetBins);
   if (r.finished?.length && PR.target === PR.G[PR.k]) {
+    const heard = r.finished[0];
+    PR.tune = {heard, reference: expected?.length === 1 ? expected[0] : heard, until: now + 2500};
+    prTuning(null);
     prHeard(r.finished);
     if (prJudge(r.finished)) prNext(true);
     else prWrong();
   }
   if (r.hit) PR.target = PR.G[PR.k];
+  const tune = PR.tune;
+  if (tune && now >= tune.until) {
+    PR.tune = null;
+    prTuning(null);
+  } else if (tune && rms > r.gate) {
+    const cents = pitchOffset(PR.fb, AC.sampleRate, an.fftSize, tune.heard, tune.reference);
+    if (cents !== null) prTuning(cents, tune.heard);
+  }
 }
 /* affiche ce que le micro capte : les notes exactes (avec l'octave), dans leur couleur.
    Pleine = bonne note ; contour pointillé = bonne couleur mais pas la bonne octave ; contour = autre note */
@@ -20856,9 +20912,23 @@ function prHeard(notes) {
   clearTimeout(PR.heardT);
   PR.heardT = setTimeout(() => h.classList.remove("on"), 2500);
 }
-function prLevel(x) {
-  const l = $("prLvl");
-  if (l) l.style.transform = `scaleX(${Math.max(0, Math.min(1, x)).toFixed(3)})`;
+function prTuning(cents, heard) {
+  const marker = $("prTuneMark"),
+    value = $("prTuneValue");
+  if (cents === null) {
+    value.textContent = "—";
+    marker.hidden = true;
+    return;
+  }
+  const rounded = Math.round(cents);
+  const label = Math.abs(rounded) <= 5 ? "Juste" : rounded < 0 ? "Trop grave" : "Trop aigu";
+  const note = PCN[heard % 12] + (Math.floor(heard / 12) - 1);
+  const offset = rounded > 0 ? "+" + rounded : String(rounded);
+  const text = `${note} · ${label} (${offset} ¢)`;
+  if (value.textContent !== text) value.textContent = text;
+  marker.style.left = Math.max(0, Math.min(100, 50 + cents)) + "%";
+  marker.classList.toggle("centered", Math.abs(rounded) <= 5);
+  marker.hidden = false;
 }
 /* Toutes les notes de l'accord doivent être présentes, à la bonne octave. */
 function prJudge(notes) {
@@ -21071,7 +21141,55 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
 /* Suivi en continu : repère chaque nouvelle attaque (énergie qui apparaît sur de nouvelles fréquences),
    puis reconnaît la note sur ce qui vient d'apparaître seulement. Une note tenue ne relance rien,
    et la note précédente qui résonne encore n'est pas reprise. Indépendant de la cadence d'images (60 ou 120 Hz). */
+function fastAttackDetector() {
+  const history = [];
+  let ready = true, last = -1e9;
+  return (db, now, allowed) => {
+    const bins = new Float32Array(Math.min(db.length, 256));
+    for (let i = 2; i < bins.length; i++) bins[i] = Math.pow(10, db[i] / 20);
+    const previous = history.filter(frame => frame.t <= now - 18);
+    let flux = 0, total = 1e-12, attack = false;
+    if (previous.length) {
+      for (let i = 2; i < bins.length; i++) {
+        let base = 1e-12;
+        for (const frame of previous) base = Math.max(base, frame.bins[i]);
+        total += bins[i];
+        flux += Math.max(0, bins[i] - base * 1.45);
+      }
+      flux /= total;
+      if (flux < 0.1) ready = true;
+      const delay = now - last;
+      const threshold = last >= 0 && delay > 135 ? 0.155 : 0.20;
+      attack = allowed && ready && flux > threshold && delay > 90;
+      if (attack) { last = now; ready = false; }
+    }
+    history.push({t: now, bins});
+    while (history.length && history[0].t < now - 65) history.shift();
+    return attack;
+  };
+}
+
+/* Estimation de la fondamentale par interpolation du pic spectral. */
+function pitchOffset(db, sr, n, midi, reference) {
+  const bw = sr / n;
+  const target = 440 * 2 ** ((midi - 69) / 12);
+  const first = Math.max(2, Math.floor(target * 2 ** (-65 / 1200) / bw));
+  const last = Math.min(db.length - 2, Math.ceil(target * 2 ** (65 / 1200) / bw));
+  let peak = -1;
+  for (let i = first; i <= last; i++) {
+    if (db[i] >= -80 && db[i] >= db[i - 1] && db[i] > db[i + 1] && (peak < 0 || db[i] > db[peak])) peak = i;
+  }
+  if (peak < 0) return null;
+  const left = db[peak - 1], mid = db[peak], right = db[peak + 1];
+  const curve = left - 2 * mid + right;
+  const shift = Number.isFinite(curve) && curve < 0 ? (0.5 * (left - right)) / curve : 0;
+  const f = (peak + Math.max(-0.5, Math.min(0.5, shift))) * bw;
+  const cents = 1200 * Math.log2(f / target);
+  return Math.abs(cents) <= 65 ? cents + (midi - reference) * 100 : null;
+}
+
 function pitchTracker(sr, n) {
+  const fastAttack = fastAttackDetector();
   const bw = sr / n,
     i0 = Math.max(2, Math.floor(PITCH.fmin / bw)),
     i1 = Math.min(n / 2 - 2, Math.ceil(PITCH.fmax / bw)),
@@ -21082,7 +21200,7 @@ function pitchTracker(sr, n) {
     last = -1e9,
     ev = null;
   return {
-    feed(db, rms, now, expected) {
+    feed(db, rms, now, expected, short) {
       const lin = new Float32Array(L);
       let tot = 1e-12;
       for (let k = 0; k < L; k++) tot += lin[k] = Math.pow(10, db[i0 + k] / 20);
@@ -21099,9 +21217,14 @@ function pitchTracker(sr, n) {
         }
         flux /= tot;
       }
-      const hit = rms > gate && flux > PITCH.flux && now - last > 220;
+      // Les notes sous E2 ont besoin d'une fenêtre plus longue.
+      const fast = expected?.length === 1 && expected[0] >= 40 && !!short;
+      const quickHit = short && fastAttack(short, now, fast && rms > gate);
+      const hit = (quickHit && now - last > 90) || (rms > gate && flux > PITCH.flux && now - last > 220);
+      const fastDone = ev?.fast && ev.notes.length === 1 && ev.notes[0] === expected?.[0] &&
+        ev.previous.length === 1 && ev.previous[0] === ev.notes[0] && now - ev.t >= 95;
       let finished = null;
-      if (ev && !ev.done && (hit || now - ev.t > 260)) {
+      if (ev && !ev.done && (hit || fastDone || now - ev.t > 260)) {
         ev.done = true;
         if (ev.previous.length) ev.notes = ev.previous;
         finished = ev.notes;
@@ -21109,17 +21232,25 @@ function pitchTracker(sr, n) {
       if (hit) {
         const ref = new Float32Array(L);
         for (const h of old) for (let k = 0; k < L; k++) if (h.lin[k] > ref[k]) ref[k] = h.lin[k];
-        ev = {t: now, ref, acc: new Float32Array(L), c: 0, previous: [], notes: [], done: false};
+        ev = {t: now, fast, ref, acc: new Float32Array(L), c: 0, previous: [], notes: [], done: false};
         last = now;
       }
       hist.push({t: now, lin});
       while (hist.length && hist[0].t < now - 200) hist.shift();
-      if (ev && now - ev.t >= 45 && now - ev.t <= 260) {
+      if (ev && !ev.done && now - ev.t >= (ev.fast ? 55 : 45)) {
         ev.c++;
         for (let k = 0; k < L; k++) ev.acc[k] += Math.max(0, lin[k] - ev.ref[k]);
         for (let k = 0; k < L; k++) out[i0 + k] = 20 * Math.log10(ev.acc[k] / ev.c + 1e-12);
         if (ev.c >= 2) {
-          const notes = pitchDetect(out, sr, n, 8, expected).map(p => p.m);
+          const found = pitchDetect(out, sr, n, 8, expected);
+          // La soustraction d'un son précédent peut laisser des pics aigus
+          // isolés. Vérifier ceux-ci aussi dans le spectre reçu.
+          const peaks = ev.fast && found.length > 1 ? pitchPeaks(db, sr, n) : null;
+          const main = found[0]?.m;
+          const notes = found.filter(p => !peaks || p.m < 84 || p.m < main + 12 ||
+            quietNoteEvidence(peaks, p.m, [main], bw) ||
+            (p.m === main + 12 && octaveEvidence(peaks, main, [], bw, false))
+          ).map(p => p.m);
           // Garder la dernière estimation confirmée sur deux analyses
           // pour les attaques dont la fin devient indétectable.
           if (notes.length && notes.length === ev.previous.length && notes.every(m => ev.previous.includes(m))) {

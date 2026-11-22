@@ -1002,21 +1002,52 @@ body.practice #steps3 {
   background: var(--c);
   color: #151a3b;
 }
-.prLvl {
-  display: block;
-  width: 72px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
+.prTune {
+  display: grid;
+  gap: 5px;
+  color: #bbc4e8;
+  font-size: 11px;
 }
-.prLvl u {
-  display: block;
+.prTuneInfo,
+.prTuneLabels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.prTuneInfo {
+  font-weight: 700;
+}
+#prTuneValue {
+  font-variant-numeric: tabular-nums;
+}
+.prTuneScale {
+  position: relative;
+  height: 10px;
+  margin: 0 5px;
+  border-radius: 5px;
+  background: #303858;
+}
+.prTuneScale i,
+.prTuneScale b {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.prTuneScale i {
+  width: 10%;
   height: 100%;
-  background: #35d66b;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.08s linear;
+  background: #28644e;
+}
+.prTuneScale b {
+  top: -2px;
+  width: 7px;
+  height: 14px;
+  border-radius: 4px;
+  background: #f6cf75;
+  transition: left 0.08s linear;
+}
+.prTuneScale b.centered {
+  background: #61e6a0;
 }
 .prNeed span.done {
   opacity: 0.35;
