@@ -950,6 +950,65 @@ body.practice #steps3 {
     sans-serif;
   text-align: center;
 }
+.prHeard {
+  margin-left: auto;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  opacity: 0.45;
+  transition: opacity 0.3s;
+}
+.prHeard.on {
+  opacity: 1;
+}
+.prHeard small {
+  font-size: 11px;
+}
+.prHeardN {
+  display: flex;
+  gap: 5px;
+  min-height: 36px;
+  align-items: center;
+}
+.prHeardN em {
+  color: #6b7397;
+  font: 900 20px Figtree, system-ui, sans-serif;
+}
+.prHeardN span {
+  min-width: 42px;
+  padding: 5px 8px;
+  border-radius: 12px;
+  border: 3px solid var(--c);
+  color: var(--c);
+  font: 900 18px Figtree, system-ui, sans-serif;
+  text-align: center;
+}
+.prHeardN span sub {
+  font-size: 11px;
+  margin-left: 1px;
+  vertical-align: baseline;
+  opacity: 0.8;
+}
+.prHeardN span.ok {
+  background: var(--c);
+  color: #151a3b;
+}
+.prLvl {
+  display: block;
+  width: 72px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.prLvl u {
+  display: block;
+  height: 100%;
+  background: #35d66b;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.08s linear;
+}
 .prNeed span.done {
   opacity: 0.35;
 }

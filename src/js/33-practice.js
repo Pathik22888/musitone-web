@@ -62,7 +62,7 @@ function prOpen() {
     P.id = "prPanel";
     P.className = "prPanel";
     P.innerHTML = `<div class="prTop"><span class="prMic" id="prMic"><i></i><b id="prMicT">Micro…</b></span><span class="prPos" id="prPos"></span><button type="button" id="prX" class="prX">Terminé</button></div>
-    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div></div>
+    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div><div class="prHeard" id="prHeard"><small>J'entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div><i class="prLvl"><u id="prLvl"></u></i></div></div>
     <div class="prHands" id="prHands"><button data-h="both" class="cur">Les deux mains</button><button data-h="r">Main droite</button><button data-h="l">Main gauche</button></div>
     <div class="prNav"><button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button><button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button></div>`;
     document.body.appendChild(P);
@@ -266,8 +266,10 @@ function prLoop() {
   if (rms > gate && rms > lo * 1.35 && now - PR.lastOn > 140) {
     PR.lastOn = now;
     PR.acc = new Float32Array(12);
+    PR.pk = null;
     PR.win = 9;
   }
+  prLevel(rms / (gate * 5));
   if (PR.win > 0 && PR.acc) {
     PR.win--;
     an.getFloatFrequencyData(PR.fb);
@@ -286,9 +288,39 @@ function prLoop() {
       if (dv > 0.35) continue;
       const a = Math.pow(10, v / 20) * (1 - dv) * (f < 300 ? 1.6 : f > 1200 ? 0.6 : 1);
       PR.acc[((r % 12) + 12) % 12] += a;
+      if (!PR.pk || a > PR.pk.a) PR.pk = {a, m: r};
     }
+    prHeard();
     prJudge();
   }
+}
+/* affiche ce que le micro capte : la ou les notes entendues, dans leur couleur, avec l'octave de la plus forte */
+function prHeard() {
+  const box = $("prHeardN"),
+    a = PR.acc;
+  if (!box || !a) return;
+  const mx = Math.max(...a);
+  if (mx <= 0) return;
+  const pcs = [...a.keys()]
+    .filter(p => a[p] >= 0.5 * mx)
+    .sort((x, y) => a[y] - a[x])
+    .slice(0, 3);
+  const g = PR.G[PR.k],
+    need = g ? g.pcs : [];
+  box.innerHTML = pcs
+    .map(pc => {
+      const oct = PR.pk && ((PR.pk.m % 12) + 12) % 12 === pc ? Math.floor(PR.pk.m / 12) - 1 : "";
+      return `<span class="${need.includes(pc) ? "ok" : "no"}" style="--c:${prColor(pc)}">${PCN[pc]}<sub>${oct}</sub></span>`;
+    })
+    .join("");
+  const h = $("prHeard");
+  h.classList.add("on");
+  clearTimeout(PR.heardT);
+  PR.heardT = setTimeout(() => h.classList.remove("on"), 2500);
+}
+function prLevel(x) {
+  const l = $("prLvl");
+  if (l) l.style.transform = `scaleX(${Math.max(0, Math.min(1, x)).toFixed(3)})`;
 }
 function prJudge() {
   const g = PR.G[PR.k];
