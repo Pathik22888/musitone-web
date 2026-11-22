@@ -272,7 +272,6 @@ function prLoop() {
     else prWrong();
   }
   if (r.hit) PR.target = PR.G[PR.k];
-  if (r.live && r.notes?.length && PR.target === PR.G[PR.k]) prHeard(r.notes);
 }
 /* affiche ce que le micro capte : les notes exactes (avec l'octave), dans leur couleur.
    Pleine = bonne note ; contour pointillé = bonne couleur mais pas la bonne octave ; contour = autre note */

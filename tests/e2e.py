@@ -233,6 +233,34 @@ def jouer_micro(b, url):
     return pg
 
 
+def jouer_micro_bref(b, url):
+    """Une note reconnue sur plusieurs images fait avancer malgré une fin de signal incertaine."""
+    pg = new_page(b)
+
+    def inject_pitch_frames(route):
+        response = route.fetch()
+        html = response.text()
+        marker = "function pitchTracker(sr, n) {"
+        assert html.count(marker) == 1
+        html = html.replace(
+            marker,
+            "let pitchTestFrames = 0;\n"
+            "pitchDetect = () => ++pitchTestFrames <= 2 ? [{m: 64}] : [];\n" + marker,
+            1,
+        )
+        route.fulfill(response=response, body=html)
+
+    pg.route("**/test.html", inject_pitch_frames)
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    pg.click("#prSkip")
+    assert pg.inner_text("#prNeed").split() == ["E4"]
+    pg.wait_for_function("document.querySelector('#prHeardN').textContent === 'E4'", timeout=5000)
+    pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('3 /')", timeout=5000)
+    assert pg.inner_text("#prHeardN").split() == ["E4"]
+    return pg
+
+
 def accord_wav():
     """Trois attaques au micro : accord incomplet, accord avec une note en trop, accord exact."""
     import subprocess
@@ -286,7 +314,8 @@ def jouer_accord(b, url):
 jouer_accord.mic = accord_wav
 
 jouer_micro.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_accord]
+jouer_micro_bref.mic = micro_wav
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_accord]
 
 
 def main():

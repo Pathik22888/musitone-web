@@ -140,12 +140,13 @@ function pitchTracker(sr, n) {
       let finished = null;
       if (ev && !ev.done && (hit || now - ev.t > 260)) {
         ev.done = true;
+        if (ev.previous.length) ev.notes = ev.previous;
         finished = ev.notes;
       }
       if (hit) {
         const ref = new Float32Array(L);
         for (const h of old) for (let k = 0; k < L; k++) if (h.lin[k] > ref[k]) ref[k] = h.lin[k];
-        ev = {t: now, ref, acc: new Float32Array(L), c: 0, notes: [], done: false};
+        ev = {t: now, ref, acc: new Float32Array(L), c: 0, previous: [], notes: [], done: false};
         last = now;
       }
       hist.push({t: now, lin});
@@ -154,7 +155,15 @@ function pitchTracker(sr, n) {
         ev.c++;
         for (let k = 0; k < L; k++) ev.acc[k] += Math.max(0, lin[k] - ev.ref[k]);
         for (let k = 0; k < L; k++) out[i0 + k] = 20 * Math.log10(ev.acc[k] / ev.c + 1e-12);
-        if (ev.c >= 2) ev.notes = pitchDetect(out, sr, n).map(p => p.m);
+        if (ev.c >= 2) {
+          const notes = pitchDetect(out, sr, n).map(p => p.m);
+          // Garder la dernière estimation confirmée sur deux analyses
+          // pour les attaques dont la fin devient indétectable.
+          if (notes.length && notes.length === ev.previous.length && notes.every(m => ev.previous.includes(m))) {
+            ev.notes = notes;
+          }
+          ev.previous = notes;
+        }
       }
       return {hit, notes: ev ? ev.notes : null, live: !!ev && !ev.done, finished, gate, flux};
     }
