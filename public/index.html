@@ -5818,6 +5818,15 @@ body.practice #steps3 {
   vertical-align: baseline;
   opacity: 0.8;
 }
+.prHeardN span.oct {
+  border-style: dashed;
+}
+.prNeed span sub {
+  font-size: 12px;
+  margin-left: 1px;
+  vertical-align: baseline;
+  opacity: 0.75;
+}
 .prHeardN span.ok {
   background: var(--c);
   color: #151a3b;
@@ -20561,10 +20570,10 @@ const PR = {
   st: null,
   raf: 0,
   ok: 0,
-  lastOn: 0,
-  fl: [],
-  win: 0,
-  acc: null
+  tr: null,
+  live: false,
+  judged: false,
+  heard: null
 };
 const PCN = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"],
   PCL = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
@@ -20581,8 +20590,14 @@ function prGroups() {
   }
   return [...by.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([k, evs]) => ({t: k / 1000, evs, pcs: [...new Set(evs.map(e => ((e.m % 12) + 12) % 12))]}));
+    .map(([k, evs]) => ({
+      t: k / 1000,
+      evs,
+      pcs: [...new Set(evs.map(e => ((e.m % 12) + 12) % 12))],
+      ms: [...new Set(evs.map(e => e.m))].sort((a, b) => a - b)
+    }));
 }
+const prName = m => PCN[((m % 12) + 12) % 12] + `<sub>${Math.floor(m / 12) - 1}</sub>`;
 function prColor(pc) {
   return PAL[PCL[pc]][1];
 }
@@ -20715,8 +20730,11 @@ function prShow() {
   const g = PR.G[PR.k];
   if (!g) return;
   $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
-  $("prNeed").innerHTML = g.pcs
-    .map(pc => `<span class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${PCN[pc]}</span>`)
+  $("prNeed").innerHTML = g.ms
+    .map(m => {
+      const pc = ((m % 12) + 12) % 12;
+      return `<span class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
+    })
     .join("");
   try {
     drawMarks();
@@ -20757,7 +20775,7 @@ function prShow() {
     }
   } catch (e) {}
 }
-/* micro : on écoute le piano, on repère chaque nouvelle attaque, puis on regarde quelles notes (do, ré, mi…) sonnent */
+/* micro : on écoute le piano ; la reconnaissance des notes est dans 34-pitch.js */
 async function prMicStart() {
   const set = (t, cl) => {
     $("prMicT").textContent = t;
@@ -20787,8 +20805,8 @@ async function prMicStart() {
     PR.an = an;
     PR.fb = new Float32Array(an.frequencyBinCount);
     PR.tb = new Float32Array(an.fftSize);
-    PR.rh = [];
-    PR.acc = null;
+    PR.tr = pitchTracker(AC.sampleRate, an.fftSize);
+    PR.live = false;
     set("J'écoute votre piano", "live");
     prLoop();
   } catch (e) {
@@ -20808,61 +20826,36 @@ function prLoop() {
   let s = 0;
   for (let i = 0; i < PR.tb.length; i += 4) s += PR.tb[i] * PR.tb[i];
   const rms = Math.sqrt(s / (PR.tb.length / 4));
-  const h = PR.rh;
-  h.push(rms);
-  if (h.length > 12) h.shift();
-  const lo = Math.min(...h.slice(0, -2));
-  PR.floor = PR.floor == null ? rms : Math.min(PR.floor * 1.002 + 1e-5, Math.max(rms, PR.floor * 0.98));
-  const now = performance.now(),
-    gate = Math.max(0.006, PR.floor * 3);
-  if (rms > gate && rms > lo * 1.35 && now - PR.lastOn > 140) {
-    PR.lastOn = now;
-    PR.acc = new Float32Array(12);
-    PR.pk = null;
-    PR.win = 9;
-  }
-  prLevel(rms / (gate * 5));
-  if (PR.win > 0 && PR.acc) {
-    PR.win--;
-    an.getFloatFrequencyData(PR.fb);
-    const sr = AC.sampleRate,
-      bw = sr / an.fftSize,
-      b0 = Math.floor(60 / bw),
-      b1 = Math.ceil(2200 / bw),
-      fb = PR.fb;
-    for (let i = b0 + 1; i < b1; i++) {
-      const v = fb[i];
-      if (v < -85 || v < fb[i - 1] || v < fb[i + 1]) continue;
-      const f = i * bw,
-        m = 69 + 12 * Math.log2(f / 440),
-        r = Math.round(m),
-        dv = Math.abs(m - r);
-      if (dv > 0.35) continue;
-      const a = Math.pow(10, v / 20) * (1 - dv) * (f < 300 ? 1.6 : f > 1200 ? 0.6 : 1);
-      PR.acc[((r % 12) + 12) % 12] += a;
-      if (!PR.pk || a > PR.pk.a) PR.pk = {a, m: r};
+  an.getFloatFrequencyData(PR.fb);
+  const r = PR.tr.feed(PR.fb, rms, performance.now());
+  prLevel(rms / (r.gate * 5));
+  if (r.hit) PR.judged = false;
+  if (r.live && r.notes && r.notes.length) {
+    prHeard(r.notes);
+    if (!PR.judged && prJudge(r.notes)) {
+      PR.judged = true;
+      prNext(true);
     }
-    prHeard();
-    prJudge();
+  } else if (PR.live && !PR.judged && PR.heard && PR.heard.length) {
+    PR.judged = true; // fin de l'écoute de cette attaque sans la bonne note
+    prWrong();
   }
+  PR.live = r.live;
 }
-/* affiche ce que le micro capte : la ou les notes entendues, dans leur couleur, avec l'octave de la plus forte */
-function prHeard() {
-  const box = $("prHeardN"),
-    a = PR.acc;
-  if (!box || !a) return;
-  const mx = Math.max(...a);
-  if (mx <= 0) return;
-  const pcs = [...a.keys()]
-    .filter(p => a[p] >= 0.5 * mx)
-    .sort((x, y) => a[y] - a[x])
-    .slice(0, 3);
+/* affiche ce que le micro capte : les notes exactes (avec l'octave), dans leur couleur.
+   Pleine = bonne note ; contour pointillé = bonne couleur mais pas la bonne octave ; contour = autre note */
+function prHeard(notes) {
+  const box = $("prHeardN");
+  if (!box) return;
+  PR.heard = notes;
   const g = PR.G[PR.k],
-    need = g ? g.pcs : [];
-  box.innerHTML = pcs
-    .map(pc => {
-      const oct = PR.pk && ((PR.pk.m % 12) + 12) % 12 === pc ? Math.floor(PR.pk.m / 12) - 1 : "";
-      return `<span class="${need.includes(pc) ? "ok" : "no"}" style="--c:${prColor(pc)}">${PCN[pc]}<sub>${oct}</sub></span>`;
+    ms = g ? g.ms : [],
+    pcs = g ? g.pcs : [];
+  box.innerHTML = notes
+    .map(m => {
+      const pc = ((m % 12) + 12) % 12,
+        cl = ms.includes(m) ? "ok" : pcs.includes(pc) ? "oct" : "no";
+      return `<span class="${cl}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
     })
     .join("");
   const h = $("prHeard");
@@ -20874,22 +20867,157 @@ function prLevel(x) {
   const l = $("prLvl");
   if (l) l.style.transform = `scaleX(${Math.max(0, Math.min(1, x)).toFixed(3)})`;
 }
-function prJudge() {
+/* bonne réponse : toutes les notes demandées entendues, à la bonne octave
+   (accord de plus de 3 notes : 3 notes justes et aucune fausse suffisent) */
+function prJudge(notes) {
   const g = PR.G[PR.k];
-  if (!g || !PR.acc) return;
-  const a = PR.acc,
-    mx = Math.max(...a);
-  if (mx <= 0) return;
-  const need = g.pcs;
-  const ok = need.length === 1 ? a[need[0]] >= 0.7 * mx : need.every(p => a[p] >= 0.3 * mx);
-  if (ok) {
-    PR.acc = null;
-    PR.win = 0;
-    prNext(true);
-  }
+  if (!g) return false;
+  const hit = g.ms.filter(m => notes.includes(m)).length;
+  if (g.ms.length <= 3) return hit === g.ms.length;
+  return hit >= 3 && notes.every(m => g.ms.includes(m));
 }
 
 $("dPrac").onclick = () => (PR.on ? prClose() : prOpen());
+/* ===== Hauteur des notes captées par le micro =====
+   Fonctions pures (aucun accès à la page) : testées hors navigateur par tests/pitch.mjs
+   avec les vrais sons de piano de piano2/. */
+/* plage reconnue : E1 à C7 (les touches extrêmes du piano ne sont pas fiables au micro d'un téléphone) */
+const PITCH = {lo: 28, hi: 96, fmin: 30, fmax: 6000, H: 14, B: 3e-4, P: 1.25, keep: 0.4, flux: 2.5, miss: 0.15, abs: 0.4, expl: 0.45};
+
+/* pics du spectre (en dB, comme AnalyserNode) : fréquence affinée + amplitude relative au plus fort */
+function pitchPeaks(db, sr, n) {
+  const bw = sr / n,
+    i0 = Math.max(2, Math.floor(PITCH.fmin / bw)),
+    i1 = Math.min(db.length - 2, Math.ceil(PITCH.fmax / bw));
+  let mx = -Infinity;
+  for (let i = i0; i < i1; i++) if (db[i] > mx) mx = db[i];
+  const lim = Math.max(-100, mx - 45),
+    pk = [];
+  for (let i = i0; i < i1; i++) {
+    const b = db[i];
+    if (b < lim || b <= db[i - 1] || b < db[i + 1]) continue;
+    const a = db[i - 1],
+      c = db[i + 1],
+      den = a - 2 * b + c,
+      p = den < 0 ? Math.max(-0.5, Math.min(0.5, (0.5 * (a - c)) / den)) : 0;
+    const amp = Math.pow(10, (b - 0.25 * (a - c) * p - mx) / 20);
+    pk.push({f: (i + p) * bw, a: amp, a0: amp});
+  }
+  return pk;
+}
+
+/* score d'une note candidate : somme des harmoniques présentes (corde de piano légèrement inharmonique) */
+function pitchScore(pk, m) {
+  const f0 = 440 * Math.pow(2, (m - 69) / 12);
+  let s = 0,
+    hits = 0,
+    low = 0;
+  const used = [];
+  for (let h = 1; h <= PITCH.H; h++) {
+    const fh = f0 * h * Math.sqrt(1 + PITCH.B * h * h);
+    if (fh > PITCH.fmax) break;
+    const tol = 0.022 + 0.003 * h;
+    let bj = -1,
+      ba = 0;
+    for (let j = 0; j < pk.length; j++) {
+      const d = Math.abs(Math.log2(pk[j].f / fh));
+      if (d < tol && pk[j].a0 > ba) {
+        ba = pk[j].a0;
+        bj = j;
+      }
+    }
+    if (bj >= 0) {
+      s += Math.pow(pk[bj].a, PITCH.P) * Math.pow(h, -0.3); // ce qui n'est pas déjà expliqué par une note trouvée
+      hits++;
+      if (h <= 3 && ba >= 0.05) low++;
+      used.push(bj);
+    }
+    /* une vraie note a des harmoniques basses bien présentes : sinon c'est un accord qui « ressemble » à une note grave */
+    if (h <= 4 && ba < 0.05) s -= h === 1 && f0 < 110 ? 0.03 : PITCH.miss;
+  }
+  const ok = low > 0 && (hits >= 2 || f0 > 1500);
+  return {m, s: ok ? s : -1, used};
+}
+
+/* notes entendues (numéros MIDI, la plus forte d'abord), au plus `max` notes */
+function pitchDetect(db, sr, n, max = 3) {
+  const pk = pitchPeaks(db, sr, n);
+  const out = [];
+  let first = 0;
+  for (let it = 0; it < max && pk.length; it++) {
+    let best = null;
+    for (let m = PITCH.lo; m <= PITCH.hi; m++) {
+      if (out.some(o => Math.abs(o.m - m) % 12 === 0 || Math.abs(o.m - m) === 19)) continue;
+      const c = pitchScore(pk, m);
+      if (!best || c.s > best.s) best = c;
+    }
+    if (!best || best.s <= 0) break;
+    if (it === 0) first = best.s;
+    else if (best.s < Math.min(PITCH.keep * first, PITCH.abs)) break;
+    out.push({m: best.m, s: best.s});
+    for (const j of best.used) pk[j].a *= 0.15;
+  }
+  /* un bruit (coup, voix, claquement) a un spectre sans harmoniques : les notes trouvées n'en expliquent qu'une petite part */
+  let all = 0,
+    left = 0;
+  for (const p of pk) {
+    all += Math.pow(p.a0, PITCH.P);
+    left += Math.pow(p.a, PITCH.P);
+  }
+  if (out.length && 1 - left / all < PITCH.expl) return [];
+  return out;
+}
+
+/* Suivi en continu : repère chaque nouvelle attaque (énergie qui apparaît sur de nouvelles fréquences),
+   puis reconnaît la note sur ce qui vient d'apparaître seulement. Une note tenue ne relance rien,
+   et la note précédente qui résonne encore n'est pas reprise. Indépendant de la cadence d'images (60 ou 120 Hz). */
+function pitchTracker(sr, n) {
+  const bw = sr / n,
+    i0 = Math.max(2, Math.floor(PITCH.fmin / bw)),
+    i1 = Math.min(n / 2 - 2, Math.ceil(PITCH.fmax / bw)),
+    L = i1 - i0,
+    hist = [],
+    out = new Float32Array(n / 2).fill(-200);
+  let floor = null,
+    last = -1e9,
+    ev = null;
+  return {
+    feed(db, rms, now) {
+      const lin = new Float32Array(L);
+      let tot = 1e-12;
+      for (let k = 0; k < L; k++) tot += lin[k] = Math.pow(10, db[i0 + k] / 20);
+      floor = floor == null ? rms : Math.min(floor * 1.002 + 1e-5, Math.max(rms, floor * 0.98));
+      const gate = Math.max(0.004, floor * 3),
+        old = hist.filter(h => h.t <= now - 30 && h.t >= now - 150);
+      let flux = 0;
+      if (old.length) {
+        for (let k = 0; k < L; k++) {
+          let r = 1e-12;
+          for (const h of old) if (h.lin[k] > r) r = h.lin[k];
+          const d = 20 * Math.log10(lin[k] / r) - 3;
+          if (d > 0) flux += lin[k] * d;
+        }
+        flux /= tot;
+      }
+      const hit = rms > gate && flux > PITCH.flux && now - last > 220;
+      if (hit) {
+        const ref = new Float32Array(L);
+        for (const h of old) for (let k = 0; k < L; k++) if (h.lin[k] > ref[k]) ref[k] = h.lin[k];
+        ev = {t: now, ref, acc: new Float32Array(L), c: 0, notes: []};
+        last = now;
+      }
+      hist.push({t: now, lin});
+      while (hist.length && hist[0].t < now - 200) hist.shift();
+      if (ev && now - ev.t >= 45 && now - ev.t <= 260) {
+        ev.c++;
+        for (let k = 0; k < L; k++) ev.acc[k] += Math.max(0, lin[k] - ev.ref[k]);
+        for (let k = 0; k < L; k++) out[i0 + k] = 20 * Math.log10(ev.acc[k] / ev.c + 1e-12);
+        if (ev.c >= 2) ev.notes = pitchDetect(out, sr, n).map(p => p.m);
+      }
+      return {hit, notes: ev ? ev.notes : null, live: !!ev && now - ev.t <= 260, gate, flux};
+    }
+  };
+}
 }
 </script>
 <div class="crop" id="crop" role="dialog" aria-label="Recadrer la partition"><div class="crTop"><button class="ovBack" id="crBack" type="button" aria-label="Retour à l’accueil">‹</button><b id="crTitle">Recadrer la partition</b><span id="crSub"></span></div>

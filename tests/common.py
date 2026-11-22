@@ -38,6 +38,8 @@ def browser(mic=False):
     args = ["--no-sandbox", "--autoplay-policy=no-user-gesture-required"]
     if mic:
         args += ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]
+        if isinstance(mic, str):  # un fichier WAV joué comme si c'était le micro
+            args += [f"--use-file-for-fake-audio-capture={mic}%noloop"]
     with sync_playwright() as p:
         b = p.chromium.launch(executable_path=CHROME, args=args)
         try:

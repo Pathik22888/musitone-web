@@ -989,6 +989,15 @@ body.practice #steps3 {
   vertical-align: baseline;
   opacity: 0.8;
 }
+.prHeardN span.oct {
+  border-style: dashed;
+}
+.prNeed span sub {
+  font-size: 12px;
+  margin-left: 1px;
+  vertical-align: baseline;
+  opacity: 0.75;
+}
 .prHeardN span.ok {
   background: var(--c);
   color: #151a3b;

@@ -201,7 +201,40 @@ def jouer(b, url):
     return pg
 
 
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer]
+def micro_wav():
+    """Faux micro : E4 (à 2 s), puis A2 (faux, à 4 s), puis C5 (à 7 s), avec les vrais sons de piano."""
+    import subprocess, tempfile
+    out = Path(tempfile.gettempdir()) / "musitone_micro.wav"
+    p2 = ROOT / "public" / "piano2"
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", p2 / "Ds4v13.mp3", "-i", p2 / "A2v13.mp3", "-i", p2 / "C5v13.mp3",
+                    "-filter_complex", "[0]asetrate=44100*1.059463,aresample=48000,adelay=2000|2000[a];[1]adelay=4000|4000[b];"
+                    "[2]adelay=7000|7000[c];[a][b][c]amix=inputs=3:normalize=0,volume=0.6,afade=t=out:st=9:d=1,apad=whole_dur=11",
+                    "-ac", "1", "-ar", "48000", "-t", "11", out], check=True)
+    return str(out)
+
+
+def jouer_micro(b, url):
+    """« Jouer » avec un vrai son de piano au micro : la note juste fait avancer, une fausse non ; la note s'affiche avec son octave."""
+    pg = new_page(b)
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    pg.evaluate("""() => { window.__log = []; let last = '';
+      setInterval(() => { const t = document.getElementById('prHeardN').innerText.replace(/\\s+/g, ' ') + ' @ ' + document.getElementById('prPos').innerText;
+        if (t !== last) { last = t; window.__log.push(t); } }, 50); }""")
+    pg.wait_for_timeout(300)
+    pg.click("#prSkip")  # 2e note de la partition : E4
+    assert pg.inner_text("#prNeed").split() == ["E4"]
+    pg.wait_for_timeout(9500)
+    log = pg.evaluate("window.__log")
+    assert any(l.startswith("E4 @ 3 /") for l in log), log  # E4 entendu, on passe à la note 3
+    assert any(l.startswith("A2 @ 3 /") for l in log), log  # A2 entendu mais faux : on reste
+    assert any(l.startswith("C5 @ 3 /") for l in log), log  # C5 n'est pas demandé : on reste
+    assert not any(l.split(" @ ")[0] not in ("—", "E4", "A2", "C5") for l in log), log  # aucune note fantôme
+    return pg
+
+
+jouer_micro.mic = "wav"
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro]
 
 
 def main():
@@ -211,7 +244,7 @@ def main():
     with serve(HTML.parent) as base:
         url = f"{base}/{HTML.name}"
         for f in todo:
-            with browser(mic=(f is jouer)) as b:
+            with browser(mic=(micro_wav() if getattr(f, "mic", None) == "wav" else f is jouer)) as b:
                 try:
                     pg = f(b, url)
                     assert not pg.errors, pg.errors

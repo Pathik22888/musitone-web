@@ -59,7 +59,8 @@ fichiers qui l'utilisent au chargement.
 | 30-view-switch | bascule partition classique ↔ vue MusiTone |
 | 31-musitone-view | vue verticale MusiTone |
 | 32-keybar-png | image du clavier coloré |
-| 33-practice | onglet « Jouer » (micro) |
+| 33-practice | onglet « Jouer » : panneau, note demandée, note entendue |
+| 34-pitch | reconnaissance des notes au micro (attaques, hauteur exacte, accords) — fonctions pures |
 
 Pour modifier une fonction : `grep -n "function nomDeLaFonction" src/js/*.js`, puis ne toucher
 que ce fichier.
@@ -79,8 +80,11 @@ que ce fichier.
 - `golden.py` — 12 partitions de référence : portées, armure, notes et suite jouée doivent
   rester identiques aux fichiers `tests/golden/*.json`. `--update` pour accepter un changement
   voulu.
-- `e2e.py` — 9 parcours utilisateur sur écran tactile de téléphone (étapes, retour, portées,
-  correction, clé, lecture, pages, export PDF, « Jouer » avec micro simulé).
+- `e2e.py` — 10 parcours utilisateur sur écran tactile de téléphone (étapes, retour, portées,
+  correction, clé, lecture, pages, export PDF, « Jouer » avec micro simulé, et avec un vrai son de piano joué dans le micro).
+- `pitch.mjs` — reconnaissance des notes avec les vrais sons de piano de `piano2/` : 92 notes
+  seules (octave exacte), accords, notes enchaînées ou tenues, réverbération, bruits ignorés.
+  `node tests/pitch.mjs` (nécessite ffmpeg).
 - `visual.py A.html B.html` — compare deux versions écran par écran au pixel près.
 
 Prérequis : `pip install playwright pillow` et Google Chrome (`/usr/bin/google-chrome`).

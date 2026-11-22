@@ -9,10 +9,10 @@ const PR = {
   st: null,
   raf: 0,
   ok: 0,
-  lastOn: 0,
-  fl: [],
-  win: 0,
-  acc: null
+  tr: null,
+  live: false,
+  judged: false,
+  heard: null
 };
 const PCN = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"],
   PCL = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
@@ -29,8 +29,14 @@ function prGroups() {
   }
   return [...by.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([k, evs]) => ({t: k / 1000, evs, pcs: [...new Set(evs.map(e => ((e.m % 12) + 12) % 12))]}));
+    .map(([k, evs]) => ({
+      t: k / 1000,
+      evs,
+      pcs: [...new Set(evs.map(e => ((e.m % 12) + 12) % 12))],
+      ms: [...new Set(evs.map(e => e.m))].sort((a, b) => a - b)
+    }));
 }
+const prName = m => PCN[((m % 12) + 12) % 12] + `<sub>${Math.floor(m / 12) - 1}</sub>`;
 function prColor(pc) {
   return PAL[PCL[pc]][1];
 }
@@ -163,8 +169,11 @@ function prShow() {
   const g = PR.G[PR.k];
   if (!g) return;
   $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
-  $("prNeed").innerHTML = g.pcs
-    .map(pc => `<span class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${PCN[pc]}</span>`)
+  $("prNeed").innerHTML = g.ms
+    .map(m => {
+      const pc = ((m % 12) + 12) % 12;
+      return `<span class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
+    })
     .join("");
   try {
     drawMarks();
@@ -205,7 +214,7 @@ function prShow() {
     }
   } catch (e) {}
 }
-/* micro : on écoute le piano, on repère chaque nouvelle attaque, puis on regarde quelles notes (do, ré, mi…) sonnent */
+/* micro : on écoute le piano ; la reconnaissance des notes est dans 34-pitch.js */
 async function prMicStart() {
   const set = (t, cl) => {
     $("prMicT").textContent = t;
@@ -235,8 +244,8 @@ async function prMicStart() {
     PR.an = an;
     PR.fb = new Float32Array(an.frequencyBinCount);
     PR.tb = new Float32Array(an.fftSize);
-    PR.rh = [];
-    PR.acc = null;
+    PR.tr = pitchTracker(AC.sampleRate, an.fftSize);
+    PR.live = false;
     set("J'écoute votre piano", "live");
     prLoop();
   } catch (e) {
@@ -256,61 +265,36 @@ function prLoop() {
   let s = 0;
   for (let i = 0; i < PR.tb.length; i += 4) s += PR.tb[i] * PR.tb[i];
   const rms = Math.sqrt(s / (PR.tb.length / 4));
-  const h = PR.rh;
-  h.push(rms);
-  if (h.length > 12) h.shift();
-  const lo = Math.min(...h.slice(0, -2));
-  PR.floor = PR.floor == null ? rms : Math.min(PR.floor * 1.002 + 1e-5, Math.max(rms, PR.floor * 0.98));
-  const now = performance.now(),
-    gate = Math.max(0.006, PR.floor * 3);
-  if (rms > gate && rms > lo * 1.35 && now - PR.lastOn > 140) {
-    PR.lastOn = now;
-    PR.acc = new Float32Array(12);
-    PR.pk = null;
-    PR.win = 9;
-  }
-  prLevel(rms / (gate * 5));
-  if (PR.win > 0 && PR.acc) {
-    PR.win--;
-    an.getFloatFrequencyData(PR.fb);
-    const sr = AC.sampleRate,
-      bw = sr / an.fftSize,
-      b0 = Math.floor(60 / bw),
-      b1 = Math.ceil(2200 / bw),
-      fb = PR.fb;
-    for (let i = b0 + 1; i < b1; i++) {
-      const v = fb[i];
-      if (v < -85 || v < fb[i - 1] || v < fb[i + 1]) continue;
-      const f = i * bw,
-        m = 69 + 12 * Math.log2(f / 440),
-        r = Math.round(m),
-        dv = Math.abs(m - r);
-      if (dv > 0.35) continue;
-      const a = Math.pow(10, v / 20) * (1 - dv) * (f < 300 ? 1.6 : f > 1200 ? 0.6 : 1);
-      PR.acc[((r % 12) + 12) % 12] += a;
-      if (!PR.pk || a > PR.pk.a) PR.pk = {a, m: r};
+  an.getFloatFrequencyData(PR.fb);
+  const r = PR.tr.feed(PR.fb, rms, performance.now());
+  prLevel(rms / (r.gate * 5));
+  if (r.hit) PR.judged = false;
+  if (r.live && r.notes && r.notes.length) {
+    prHeard(r.notes);
+    if (!PR.judged && prJudge(r.notes)) {
+      PR.judged = true;
+      prNext(true);
     }
-    prHeard();
-    prJudge();
+  } else if (PR.live && !PR.judged && PR.heard && PR.heard.length) {
+    PR.judged = true; // fin de l'écoute de cette attaque sans la bonne note
+    prWrong();
   }
+  PR.live = r.live;
 }
-/* affiche ce que le micro capte : la ou les notes entendues, dans leur couleur, avec l'octave de la plus forte */
-function prHeard() {
-  const box = $("prHeardN"),
-    a = PR.acc;
-  if (!box || !a) return;
-  const mx = Math.max(...a);
-  if (mx <= 0) return;
-  const pcs = [...a.keys()]
-    .filter(p => a[p] >= 0.5 * mx)
-    .sort((x, y) => a[y] - a[x])
-    .slice(0, 3);
+/* affiche ce que le micro capte : les notes exactes (avec l'octave), dans leur couleur.
+   Pleine = bonne note ; contour pointillé = bonne couleur mais pas la bonne octave ; contour = autre note */
+function prHeard(notes) {
+  const box = $("prHeardN");
+  if (!box) return;
+  PR.heard = notes;
   const g = PR.G[PR.k],
-    need = g ? g.pcs : [];
-  box.innerHTML = pcs
-    .map(pc => {
-      const oct = PR.pk && ((PR.pk.m % 12) + 12) % 12 === pc ? Math.floor(PR.pk.m / 12) - 1 : "";
-      return `<span class="${need.includes(pc) ? "ok" : "no"}" style="--c:${prColor(pc)}">${PCN[pc]}<sub>${oct}</sub></span>`;
+    ms = g ? g.ms : [],
+    pcs = g ? g.pcs : [];
+  box.innerHTML = notes
+    .map(m => {
+      const pc = ((m % 12) + 12) % 12,
+        cl = ms.includes(m) ? "ok" : pcs.includes(pc) ? "oct" : "no";
+      return `<span class="${cl}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
     })
     .join("");
   const h = $("prHeard");
@@ -322,19 +306,14 @@ function prLevel(x) {
   const l = $("prLvl");
   if (l) l.style.transform = `scaleX(${Math.max(0, Math.min(1, x)).toFixed(3)})`;
 }
-function prJudge() {
+/* bonne réponse : toutes les notes demandées entendues, à la bonne octave
+   (accord de plus de 3 notes : 3 notes justes et aucune fausse suffisent) */
+function prJudge(notes) {
   const g = PR.G[PR.k];
-  if (!g || !PR.acc) return;
-  const a = PR.acc,
-    mx = Math.max(...a);
-  if (mx <= 0) return;
-  const need = g.pcs;
-  const ok = need.length === 1 ? a[need[0]] >= 0.7 * mx : need.every(p => a[p] >= 0.3 * mx);
-  if (ok) {
-    PR.acc = null;
-    PR.win = 0;
-    prNext(true);
-  }
+  if (!g) return false;
+  const hit = g.ms.filter(m => notes.includes(m)).length;
+  if (g.ms.length <= 3) return hit === g.ms.length;
+  return hit >= 3 && notes.every(m => g.ms.includes(m));
 }
 
 $("dPrac").onclick = () => (PR.on ? prClose() : prOpen());

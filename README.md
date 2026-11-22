@@ -15,7 +15,8 @@ Tout le traitement se fait dans le téléphone ou l'ordinateur : aucun serveur n
 # 1. modifier un fichier dans src/
 python3 tools/build.py all        # 2. reconstruire site + artifact + version de test
 python3 tests/golden.py           # 3. vérifier : 12 partitions de référence
-python3 tests/e2e.py              #    9 parcours utilisateur
+python3 tests/e2e.py              #    10 parcours utilisateur
+node tests/pitch.mjs              #    reconnaissance des notes au micro
 git commit -am "…" && git push    # 4. publier
 ```
 
