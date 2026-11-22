@@ -1,0 +1,107 @@
+<style>
+.mxEntry{display:grid;grid-template-columns:1fr;gap:10px;margin:14px 0 0;max-width:460px}
+.mxEntry button{min-height:58px;justify-content:flex-start;text-align:left;white-space:normal;line-height:1.2;padding:10px 14px}
+.mxEntry button span{display:block;font-weight:600;font-size:12.5px;opacity:.7}
+body.home .mxEntry button{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.2);color:#fff}
+.mxEntry svg{width:24px;height:24px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+body.mx-on{overflow:hidden}
+#mx{position:fixed;inset:0;z-index:60;background:var(--bg);color:var(--ink);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.mx-scr{max-width:620px;margin:0 auto;padding:calc(12px + env(safe-area-inset-top)) 18px calc(110px + env(safe-area-inset-bottom))}
+.mx-top{display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--bg);padding:6px 0 10px;z-index:2}
+.mx-top h2{font-size:19px;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mx-ib{width:44px;padding:0;justify-content:center;border-radius:50%}.mx-ib svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mx-drop{display:grid;place-items:center;text-align:center;gap:8px;border:2px dashed var(--line);border-radius:20px;padding:42px 18px;margin:8px 0 14px;cursor:pointer}
+.mx-drop b{font-size:18px}.mx-drop span{color:var(--mute);font-size:14px}.mx-drop input{display:none}
+.mx-err{color:#d63b3b;font-weight:700;white-space:pre-line}
+.mx-h{font-size:13px;font-weight:800;color:var(--mute);margin:22px 0 8px}
+.mx-in{width:100%;box-sizing:border-box;font:700 17px Nunito,sans-serif;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.mx-trk{border:1.5px solid var(--line);border-radius:14px;padding:10px;margin-bottom:8px}
+.mx-tn{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin:0 2px 8px}.mx-tn span{color:var(--mute);font-size:13px;white-space:nowrap}
+.mx-seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--panel);border-radius:11px;padding:3px}
+.mx-seg button{min-height:38px;border:0;background:none;font-size:13px;padding:0 4px;justify-content:center;border-radius:9px}
+.mx-seg button.on{background:var(--ink);color:var(--bg)}
+.mx-help{font-size:13px;color:var(--mute);margin:4px 2px}
+.mx-kst{display:grid;gap:2px;padding:12px 14px;border-radius:14px;background:var(--panel)}.mx-kst b{font-size:18px}.mx-kst span{font-size:13.5px;color:var(--mute)}
+.mx-kst.warn{box-shadow:inset 4px 0 0 #FF922E}.mx-kst.ok{box-shadow:inset 4px 0 0 #35D66B}
+.mx-est{font-size:14px;margin:10px 2px}
+.mx-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.mx-chips button{min-height:38px;font-size:14px;border-radius:99px}.mx-chips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.mx-chips i{font-style:normal;font-weight:600;font-size:11.5px;opacity:.7;margin-left:2px}
+.mx-other{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mute);margin-top:6px}.mx-other select{font:700 14px Nunito,sans-serif;padding:8px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.mx-mini{position:relative;display:grid;grid-template-columns:repeat(7,1fr);height:74px;margin:14px 0 2px;border-radius:8px;overflow:hidden;border:1.5px solid #0A1224;background:#0A1224;gap:1.5px}
+.mx-mini i{display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font:800 12px Nunito,sans-serif;font-style:normal;color:#193C35}
+.mx-mini u{position:absolute;top:0;width:9%;height:58%;text-decoration:none;border:1.5px solid #0A1224;border-top:0;border-radius:0 0 4px 4px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px;font:800 9.5px Nunito,sans-serif;color:#193C35}
+.mx-meter{display:grid;gap:2px;padding:12px 14px;border-radius:14px;background:var(--panel)}.mx-meter span{font-size:13px;color:var(--mute)}
+.mx-fmt{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mx-fmt button{min-height:94px;flex-direction:column;justify-content:center;gap:4px;white-space:normal;text-align:center;line-height:1.2;border-radius:16px}
+.mx-fmt button span{font-weight:600;font-size:12.5px;color:var(--mute)}.mx-fmt button.on{border-color:var(--ink);border-width:3px}
+.mx-fmt svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:1.7}
+.mx-mpp{margin-top:12px}.mx-mpp>span{font-size:13px;font-weight:800;color:var(--mute)}
+.mx-warn p{font-size:13px;color:var(--mute);margin:8px 2px}
+.mx-bot{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:10px 18px calc(10px + env(safe-area-inset-bottom));z-index:3}
+.mx-bot>div{max-width:620px;margin:0 auto;display:grid;gap:4px}
+.mx-bot .btn,.mx-bot button{width:100%;justify-content:center;min-height:52px;font-size:16px}
+.mx-bot small{text-align:center;color:var(--mute);font-size:12.5px}
+.mx-bot button:disabled{opacity:.4;cursor:default}
+.mx-prog{display:grid;place-items:center;text-align:center;gap:14px;min-height:60vh}
+.mx-track{width:min(420px,86vw);height:12px;border-radius:99px;background:var(--panel);overflow:hidden}
+#mxBar{height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#2F80FF,#FF922E,#35D66B,#FF4B4B,#FFE94A,#A66CFF,#FF70C8);transition:width .2s}
+#mxPct{font:800 28px Nunito,sans-serif}
+.mx-pages{display:grid;gap:14px;margin-top:6px}.mx-pages img{width:100%;display:block;border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+.mx-pages.ph img{border-radius:16px;max-width:420px;margin:0 auto}
+.mx-meta{color:var(--mute);font-size:13.5px;margin:-4px 0 6px}.mx-ok{color:#22a356;font-weight:700;font-size:13.5px;margin:0 0 8px}
+.mx-row{display:grid;grid-template-columns:1fr auto;gap:8px}
+.mx-x{align-self:center;padding:10px 12px;border-radius:12px;color:#8a90a6;font-weight:800;font-size:14px;white-space:nowrap}.mx-x[data-arm="1"]{background:#ffe3e3;color:#c62828}
+.mx-item{width:100%;display:grid;grid-template-columns:62px 1fr auto;gap:12px;align-items:center;text-align:left;min-height:96px;padding:8px;margin-bottom:8px;border-radius:16px;white-space:normal}
+.mx-th{width:62px;height:80px;border-radius:6px;background:var(--panel) center top/cover;box-shadow:0 2px 8px rgba(0,0,0,.15)}.mx-th.png{border-radius:10px}
+.mx-it{display:grid;gap:2px}.mx-it b{font-size:16px}.mx-it span{font-weight:600;font-size:13px;color:var(--mute)}
+.mx-empty{display:grid;gap:4px;text-align:center;padding:40px 10px;color:var(--mute)}.mx-empty b{color:var(--ink);font-size:17px}
+
+/* même thème sombre que le reste de l'appli */
+#mx{--bg:#0B1124;--ink:#F3F6FF;--mute:#93A6C4;--line:rgba(255,255,255,.14);--panel:rgba(255,255,255,.06);--paper:#0B1124;background:linear-gradient(180deg,#0B1124,#070B18)}
+#mx .mx-top{background:#0B1124}
+#mx button{background:rgba(255,255,255,.07);color:#F3F6FF;border:1px solid rgba(255,255,255,.16);box-shadow:none}
+#mx button.pri,#mx #mxSave,#mx #mxToImp{background:#fff;color:#0B1124;border-color:#fff}
+#mx button:disabled{opacity:.45}
+#mx .mx-seg button{border:0;background:none}#mx .mx-seg button.on,#mx .mx-chips button.on{background:#fff;color:#0B1124;border-color:#fff}
+#mx .mx-in,#mx select{background:rgba(255,255,255,.06);color:#F3F6FF;border-color:rgba(255,255,255,.18)}
+#mx select option{color:#0B1124}
+#mx .mx-item{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+#mx .mx-x[data-arm="1"]{background:#4a1520;color:#ff8a8a}
+#mx .mx-kst.warn{box-shadow:inset 4px 0 0 #FF922E}#mx .mx-kst.ok{box-shadow:inset 4px 0 0 #35D66B}
+#mx .mx-bot button{width:100%}#mx #mxGo{margin-top:8px;min-height:46px}
+</style>
+<div id="mx" hidden>
+ <section class="mx-scr" id="mxImport">
+  <div class="mx-top"><button class="mx-ib" data-mx-close aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Créer depuis un fichier MIDI</h2></div>
+  <label class="mx-drop"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><b>Choisir un fichier .mid</b><span>Exporté depuis GarageBand, MuseScore, un clavier…</span><input type="file" id="mxFile" accept=".mid,.midi,audio/midi,audio/x-midi"></label>
+  <p class="mx-err" id="mxErr"></p>
+  <p class="mx-help">Les notes du fichier sont reprises telles quelles : mêmes hauteurs, mêmes attaques, mêmes durées, silences et accords compris. Rien n’est transposé ni simplifié.</p>
+ </section>
+ <section class="mx-scr" id="mxSetup" hidden>
+  <div class="mx-top"><button class="mx-ib" id="mxBackImp" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Votre partition</h2></div>
+  <div class="mx-h">Titre</div><input class="mx-in" id="mxTitle" maxlength="80" autocomplete="off">
+  <div class="mx-h">Pistes et mains</div><div id="mxTracks"></div>
+  <p class="mx-help" id="mxSplitHelp" hidden>« Partager » : les notes sous le C4 vont à la main gauche, les autres à la main droite.</p>
+  <div class="mx-h">Gamme</div><div id="mxKey"></div>
+  <div class="mx-h">Mesure et tempo</div><div class="mx-meter" id="mxMeter"></div>
+  <div class="mx-h">Format</div>
+  <div class="mx-fmt" id="mxFmt"><button type="button" data-f="pdf" class="on"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/></svg><b>PDF A4</b><span>Fond clair, 4 mesures par ligne, à imprimer</span></button><button type="button" data-f="png"><svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><b>Vertical</b><span>Format téléphone, lecture de bas en haut vers le clavier</span></button></div>
+  <div class="mx-mpp" id="mxMpp" hidden></div>
+  <div class="mx-warn" id="mxWarn"></div>
+  <div class="mx-bot"><div><button class="pri" id="mxPlay">Voir et écouter en MusiTone</button><button id="mxGo">Créer le PDF A4</button><small id="mxWhy"></small><small id="mxCount"></small></div></div>
+ </section>
+ <section class="mx-scr" id="mxProg" hidden>
+  <div class="mx-prog"><div id="mxPct">0 %</div><div class="mx-track"><div id="mxBar"></div></div><p id="mxPMsg"></p><p class="mx-err" id="mxPErr"></p><button id="mxPBack" hidden>Revenir aux réglages</button></div>
+ </section>
+ <section class="mx-scr" id="mxView" hidden>
+  <div class="mx-top"><button class="mx-ib" id="mxVBack" aria-label="Retour à mes partitions"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h2 id="mxVT"></h2><button class="mx-ib" id="mxDel" aria-label="Supprimer"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg></button></div>
+  <p class="mx-meta" id="mxVM"></p><p class="mx-ok" id="mxNote"></p>
+  <div class="mx-pages" id="mxPages"></div>
+  <div class="mx-bot"><div><button class="pri" id="mxSave">Télécharger</button></div></div>
+ </section>
+ <section class="mx-scr" id="mxLib" hidden>
+  <div class="mx-top"><button class="mx-ib" data-mx-close aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Mes partitions</h2></div>
+  <div id="mxList"></div>
+  <div class="mx-bot"><div><button class="pri" id="mxToImp" hidden style="display:none">Créer depuis un fichier MIDI</button></div></div>
+ </section>
+</div>

@@ -1,0 +1,4 @@
+# Cloudflare Pages : le site publié est le dossier public/ (le reste du dépôt n'est pas mis en ligne)
+name = "musitone-web"
+pages_build_output_dir = "public"
+compatibility_date = "2026-11-01"

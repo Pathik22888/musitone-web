@@ -1,0 +1,277 @@
+/* ===== écran de travail « studio » : fond nuit, la partition comme une feuille lumineuse, outils en verre sombre ===== */
+body.working {
+  background: radial-gradient(900px 500px at 80% -10%, #1a2150 0%, transparent 60%), #0b0e20;
+  color: #eef0fb;
+  --wk-glass: rgba(23, 28, 58, 0.78);
+  --wk-line: rgba(255, 255, 255, 0.09);
+}
+body.working .bar {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 6px 4px;
+  margin: 6px 10px 6px;
+}
+body.working .rb2 {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px var(--wk-line);
+}
+body.working .rb2 svg {
+  stroke: #fff;
+}
+body.working #undo:disabled {
+  opacity: 0.3;
+}
+body.working .ttl b {
+  color: #fff;
+  font-size: 20px;
+}
+body.working .bar .stat span.main {
+  color: #a4a9c8;
+}
+body.working .bar .stat span.warn {
+  color: #ffb070;
+  background: rgba(255, 146, 46, 0.16);
+}
+body.working .adv[open] .rb2 {
+  background: #fff;
+  color: #151a3b;
+}
+body.working .adv[open] .rb2 circle {
+  fill: #151a3b;
+}
+body.working .adv .advIn {
+  background: #151a33;
+  color: #eef0fb;
+  border-color: var(--wk-line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+body.working .adv .advIn button,
+body.working .adv .advIn .btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: #eef0fb;
+  border-color: var(--wk-line);
+}
+body.working .adv .advIn label.tg {
+  color: #c9cde6;
+}
+body.working main {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+body.working .view {
+  background: #060816 !important;
+  border-radius: 24px;
+  box-shadow: inset 0 0 0 1px var(--wk-line) !important;
+}
+body.working .stage canvas#cv {
+  border-radius: 4px;
+}
+/* zoom : une seule colonne en verre */
+body.working .fz {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px;
+  border-radius: 22px;
+  background: var(--wk-glass);
+  box-shadow:
+    inset 0 0 0 1px var(--wk-line),
+    0 10px 30px rgba(0, 0, 0, 0.35) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+}
+body.working .fz button {
+  width: 44px;
+  height: 44px;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #fff;
+  font-size: 22px;
+  border-radius: 16px;
+}
+body.working .fz button + button {
+  margin-top: 2px;
+}
+body.working .fz .help1 {
+  margin-top: 8px !important;
+  border-top: 1px solid var(--wk-line);
+  border-radius: 0 0 16px 16px;
+}
+/* barre d'actions */
+body.working .dock {
+  background: var(--wk-glass) !important;
+  box-shadow:
+    inset 0 0 0 1px var(--wk-line),
+    0 16px 44px rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: saturate(1.4) blur(18px) !important;
+  -webkit-backdrop-filter: saturate(1.4) blur(18px) !important;
+  border-radius: 28px;
+}
+body.working .dock button {
+  color: #eef0fb;
+}
+body.working .dock .share {
+  background: #fff;
+  color: #151a3b;
+  box-shadow: 0 8px 26px rgba(47, 128, 255, 0.35);
+}
+body.working .dock .orig.on {
+  background: #fff;
+  color: #151a3b;
+}
+/* aide */
+body.working .coach {
+  background: #fff;
+  color: #151a3b;
+}
+body.working .coach #cOk {
+  background: #eceff9;
+  color: #151a3b;
+}
+/* correcteur sombre */
+body.working .pal {
+  background: #121633;
+  color: #eef0fb;
+  box-shadow:
+    0 -1px 0 var(--wk-line),
+    0 -20px 50px rgba(0, 0, 0, 0.4);
+}
+body.working .grab {
+  background: rgba(255, 255, 255, 0.18);
+}
+body.working .palLab b {
+  color: #fff;
+}
+body.working .palLab span {
+  color: #a4a9c8;
+}
+body.working .rb {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+body.working .rb svg {
+  stroke: #fff;
+}
+body.working .typeRow {
+  background: rgba(255, 255, 255, 0.06);
+}
+body.working .typeRow button {
+  color: #c9cde6;
+}
+body.working .typeRow button.cur {
+  background: #fff;
+  color: #151a3b;
+}
+body.working .notes7 {
+  background: #05070f;
+  box-shadow: inset 0 0 0 1px var(--wk-line);
+}
+body.working .notes7 button.cur {
+  box-shadow:
+    inset 0 0 0 3px #fff,
+    inset 0 -4px 0 rgba(0, 0, 0, 0.15),
+    0 0 22px color-mix(in srgb, var(--c) 70%, transparent);
+}
+body.working .palPeek button,
+body.working #pAcc {
+  background: rgba(255, 255, 255, 0.07);
+  color: #eef0fb;
+  border: 0;
+}
+body.working .palPeek button.on {
+  background: #fff;
+  color: #151a3b;
+}
+body.working #pDel {
+  background: rgba(255, 75, 75, 0.14);
+  color: #ff8080;
+}
+body.working .pdot {
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.12),
+    0 0 20px color-mix(in srgb, currentColor 20%, transparent);
+}
+body.working .pdot.ghost {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+body.working .clefLink {
+  color: #8c92b8;
+}
+body.working .origTip {
+  background: #fff;
+  color: #151a3b;
+}
+body.working .busy {
+  background: rgba(11, 14, 32, 0.86);
+  color: #fff;
+}
+body.working .ld span {
+  color: #a4a9c8;
+}
+body.working .zhint {
+  background: #fff;
+  color: #151a3b;
+}
+.notes7 button .okb {
+  position: absolute;
+  left: 50%;
+  bottom: 31px;
+  transform: translateX(-50%);
+  z-index: 3;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--c) 45%, transparent),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+.notes7 button .okb svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: #151a3b;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.notes7 button.cur::before {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .notes7 button .okb {
+    animation: okp 1.3s ease-in-out infinite;
+  }
+  @keyframes okp {
+    0%,
+    100% {
+      transform: translateX(-50%) scale(1);
+    }
+    50% {
+      transform: translateX(-50%) scale(1.1);
+    }
+  }
+}
+#pOk {
+  order: 9;
+  flex: 1 1 100%;
+  min-height: 50px;
+  font:
+    700 17px Figtree,
+    sans-serif;
+  letter-spacing: 0.02em;
+}
+body.working #pOk {
+  background: #fff;
+  color: #151a3b;
+  border: 0;
+  box-shadow: 0 8px 24px rgba(47, 128, 255, 0.28);
+}

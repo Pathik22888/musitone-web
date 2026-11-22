@@ -1,0 +1,122 @@
+/* ===== accueil premium ===== */
+.piano,
+.empty > .piano {
+  display: block;
+  background: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  height: auto !important;
+}
+.piano .heroSvg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.35));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hscan {
+    animation: hsc 2.2s cubic-bezier(0.65, 0, 0.35, 1) 0.3s both;
+  }
+  @keyframes hsc {
+    from {
+      transform: translateX(-240px);
+    }
+    to {
+      transform: none;
+    }
+  }
+  .hclip {
+    animation: hcl 2.2s cubic-bezier(0.65, 0, 0.35, 1) 0.3s both;
+  }
+  @keyframes hcl {
+    from {
+      transform: translateX(-240px);
+    }
+    to {
+      transform: none;
+    }
+  }
+  .hclipL {
+    animation: hcl2 2.2s cubic-bezier(0.65, 0, 0.35, 1) 0.3s both;
+  }
+  @keyframes hcl2 {
+    from {
+      transform: scaleX(0.245);
+    }
+    to {
+      transform: none;
+    }
+  }
+  .htag {
+    animation: htg 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  }
+  .htagX {
+    animation-delay: 2.4s;
+  }
+  .htag:nth-of-type(2) {
+    animation-delay: 2.6s;
+  }
+  @keyframes htg {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  .hk {
+    animation: hkp 0.45s ease both;
+    animation-delay: calc(2.5s + var(--i) * 0.05s);
+    transform-box: fill-box;
+    transform-origin: top;
+  }
+  @keyframes hkp {
+    0%,
+    100% {
+      transform: none;
+    }
+    40% {
+      transform: scaleY(0.97);
+    }
+  }
+}
+.empty h2 {
+  background: linear-gradient(180deg, #fff 30%, #c9d2ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.empty .btn.pri {
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.empty .btn.pri:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 50px rgba(47, 128, 255, 0.45);
+}
+body.home {
+  background:
+    radial-gradient(1200px 700px at 85% 10%, #1a2150 0%, transparent 60%),
+    radial-gradient(900px 600px at 0% 100%, #141a40 0%, transparent 60%), #0b0e20;
+}
+.steps li::before {
+  background: linear-gradient(135deg, #2f80ff, #a66cff);
+  color: #fff;
+}
+.piano {
+  width: 100%;
+  justify-self: stretch;
+}
+.empty svg.heroSvg {
+  max-height: none;
+}
+@media (max-width: 700px) {
+  .piano {
+    margin: 0 -4px 6px !important;
+    width: calc(100% + 8px);
+  }
+}

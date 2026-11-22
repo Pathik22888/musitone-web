@@ -1,0 +1,11 @@
+{
+  "name": "musitone-tools",
+  "private": true,
+  "description": "Outils de développement : mise en forme du code et contrôle d'équivalence",
+  "type": "module",
+  "dependencies": {
+    "acorn": "^8.14.0",
+    "postcss": "^8.4.0",
+    "prettier": "^3.3.0"
+  }
+}
