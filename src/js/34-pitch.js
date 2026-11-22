@@ -68,6 +68,38 @@ function pitchScore(pk, m) {
   return {m, s: ok ? s : -1, used, fundamental: fundamental?.a ?? 0, independent};
 }
 
+// Une octave réelle renforce plusieurs harmoniques paires de la basse.
+function octaveEvidence(peaks, lower, other, bw) {
+  const f = 440 * 2 ** ((lower - 69) / 12);
+  const harmonic = (base, h) => base * h * Math.sqrt(1 + PITCH.B * h * h);
+  const otherBases = other.map(m => 440 * 2 ** ((m - 69) / 12));
+  const amplitude = (frequency, rejectOther) => {
+    const tolerance = Math.max(bw * 0.8, frequency * 0.012);
+    let value = 0;
+    for (const p of peaks) {
+      if (Math.abs(p.f - frequency) > tolerance) continue;
+      if (rejectOther && otherBases.some(base => {
+        const h = Math.round(p.f / base);
+        return h > 0 && Math.abs(p.f - harmonic(base, h)) <= Math.max(bw, p.f * 0.015);
+      })) continue;
+      value = Math.max(value, p.a0);
+    }
+    return value;
+  };
+  let evidence = 0, strong = false, odd = false;
+  for (let h = 2; h <= 5; h++) {
+    const amp = amplitude(harmonic(f * 2, h), true);
+    const neighbours = Math.max(amplitude(harmonic(f, h * 2 - 1), false), amplitude(harmonic(f, h * 2 + 1), false));
+    // Une harmonique impaire de l'octave haute aide à écarter un son joué deux octaves au-dessus.
+    if (h % 2 && amp >= Math.max(0.07, 0.36 * neighbours)) odd = true;
+    if (amp >= Math.max(0.045, 0.75 * neighbours)) {
+      evidence++;
+      if (amp >= Math.max(0.26, 1.7 * neighbours) && h <= 3) strong = true;
+    }
+  }
+  return strong && odd && evidence >= 2;
+}
+
 /* notes entendues (numéros MIDI, la plus forte d'abord), au plus `max` notes */
 function pitchDetect(db, sr, n, max = 8, expected = []) {
   const pk = pitchPeaks(db, sr, n);
@@ -108,6 +140,15 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
   /* un bruit (coup, voix, claquement) a un spectre sans harmoniques : les notes trouvées n'en expliquent qu'une petite part */
   const left = pk.reduce((sum, p) => sum + Math.pow(p.a, PITCH.P), 0);
   if (out.length && 1 - left / all < PITCH.expl) return [];
+  if (out.length && out.every(note => expected.includes(note.m))) {
+    const heard = out.map(note => note.m);
+    for (const m of expected) {
+      const lower = m - 12;
+      if (out.length >= max || m > PITCH.hi || heard.includes(m) || !heard.includes(lower)) continue;
+      const other = heard.filter(note => note !== lower);
+      if (octaveEvidence(pk, lower, other, sr / n)) out.push({m, s: 0});
+    }
+  }
   return out;
 }
 

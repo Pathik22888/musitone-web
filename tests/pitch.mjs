@@ -65,10 +65,10 @@ function mix(parts, len) {
   return y;
 }
 // simule l'appli : détection d'attaque, puis analyse pendant quelques images
-function run(y) {
+function run(y, expected) {
   const tr = pitchTracker(SR, N), events = [];
   for (let end = N; end < y.length; end += HOP) {
-    const t = (end / SR) * 1000, o = tr.feed(spectrum(y, end), rms(y, end), t);
+    const t = (end / SR) * 1000, o = tr.feed(spectrum(y, end), rms(y, end), t, expected);
     if (o.hit) events.push({t: t / 1000, notes: []});
     if (events.length) { events[events.length - 1].notes = o.notes; }
   }
@@ -139,6 +139,22 @@ for (const chord of chordCases) {
   else bad.push(`accord ${chord.map(nm).join("-")} -> ${got.map(nm).join(",")} (${evs.length} attaques)`);
 }
 console.log(`Accords usuels, sans note en trop : ${exactChords}/${chordCases.length}`);
+// Cas du Tambourineur : C4 doit être joué en plus de C3 et E3.
+const octaveTarget = [48, 52, 60];
+const seedBeforeOctaves = seed;
+let octavesOK = 0;
+for (const rightHand of [null, 72, 60]) {
+  const parts = [[by[48], SR * 0.4, 1], [shift(by[51], 1), SR * 0.4, 0.8]];
+  if (rightHand !== null) parts.push([by[rightHand], SR * 0.4, 0.8]);
+  const evs = run(mix(parts, Math.round(SR * 1.1)), octaveTarget);
+  const got = evs[0]?.notes || [];
+  const matches = got.length === octaveTarget.length && octaveTarget.every(m => got.includes(m));
+  if (evs.length === 1 && matches === (rightHand === 60)) octavesOK++;
+  else bad.push(`accord à l’octave (${rightHand === null ? "main gauche seule" : nm(rightHand)}) -> ${got.map(nm).join(",")}`);
+}
+// Les cas de réverbération conservent leur bruit de référence.
+seed = seedBeforeOctaves;
+console.log(`Accord à l’octave, version exacte et refus : ${octavesOK}/3`);
 // note tenue puis nouvelle note par-dessus : 2 attaques attendues, la 2e reconnue
 let sok = 0, stot = 0;
 for (const [a, b] of [[60, 64 - 1], [57, 60], [48, 54], [69, 72], [63, 66], [60, 60], [45, 45], [72, 60], [54, 51]]) {
@@ -179,6 +195,6 @@ console.log(`Bruits sans note ignorés : ${nok}/${bursts.length}`);
 console.log(`Avec réverbération : ${rok}/${rtot}`);
 if (process.argv.includes("-v") || bad.length) console.log(bad.join("\n"));
 fs.rmSync(tmp, {recursive: true});
-const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && sok === stot && rok === rtot && nok === bursts.length;
+const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
 console.log(pass ? "OK" : "ÉCHEC");
 process.exit(pass ? 0 : 1);

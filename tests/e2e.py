@@ -323,6 +323,38 @@ def jouer_deux_mains(b, url):
     return pg
 
 
+def octave_mains_wav():
+    return chords_wav(
+        "musitone_octave_mains.wav",
+        {"C3": ("C3", 0, 0.4), "E3": ("Ds3", 1, 0.32), "C4": ("C4", 0, 0.32), "C5": ("C5", 0, 0.32)},
+        [(2000, ["C3", "E3"]), (4200, ["C3", "E3", "C5"]), (6500, ["C3", "E3", "C4"])],
+    )
+
+
+def jouer_octave_mains(b, url):
+    """C3–E3 et C3–E3–C5 sont refusés, C3–E3–C4 fait avancer."""
+    pg = new_page(b)
+
+    def excerpt(route):
+        response = route.fetch()
+        html = response.text()
+        start = html.index("function prGroups()")
+        marker = "  for (const e of S.ev) {"
+        i = html.index(marker, start) + len(marker)
+        # Le premier accord de t2.png contient aussi G3. Reprendre les trois notes de la capture.
+        route.fulfill(response=response, body=html[:i] + "\n    if (e.t === 0 && e.m === 55) continue;" + html[i:])
+
+    pg.route("**/test.html", excerpt)
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    assert pg.inner_text("#prNeed").split() == ["C3", "E3", "C4"]
+    pg.wait_for_timeout(5400)  # Deux premiers essais terminés, avant le C4 à 6,5 s.
+    assert pg.inner_text("#prPos").startswith("1 /")
+    pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=6500)
+    assert sorted(pg.locator("#prHeardN span").all_text_contents()) == ["C3", "C4", "E3"]
+    return pg
+
+
 def jouer_accord(b, url):
     """Le micro valide seulement l'accord complet, sans note en trop."""
     pg = new_page(b)
@@ -349,10 +381,11 @@ def jouer_accord(b, url):
 
 jouer_accord.mic = accord_wav
 jouer_deux_mains.mic = deux_mains_wav
+jouer_octave_mains.mic = octave_mains_wav
 
 jouer_micro.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_accord, jouer_deux_mains]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_accord, jouer_deux_mains, jouer_octave_mains]
 
 
 def main():
