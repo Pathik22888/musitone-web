@@ -155,6 +155,39 @@ for (const rightHand of [null, 72, 60]) {
 // Les cas de réverbération conservent leur bruit de référence.
 seed = seedBeforeOctaves;
 console.log(`Accord à l’octave, version exacte et refus : ${octavesOK}/3`);
+// Sol naturel sur toutes ses octaves prises en charge, avec une attaque douce.
+const seedBeforeG = seed;
+let gNotesOK = 0;
+for (const m of [31, 43, 55, 67, 79, 91]) {
+  const events = run(mix([[shift(by[m - 1], 1), SR * 0.4, 0.18]], Math.round(SR * 1.1)));
+  const got = events[0]?.notes || [];
+  if (events.length === 1 && got.length === 1 && got[0] === m) gNotesOK++;
+  else bad.push(`Sol doux ${nm(m)} -> ${got.map(nm).join(",")}`);
+}
+console.log(`Sol joué doucement : ${gNotesOK}/6`);
+
+const gTarget = [55, 59, 62];
+const gCases = [
+  [[55, 59, 62], 1],
+  [[55, 59, 62], 0.45],
+  [[59, 62], 1],
+  [[67, 59, 62], 1],
+  [[55, 59, 62, 67], 0.45],
+  [[43, 47, 50], 1, [43, 47, 50]],
+  [[55, 47, 50], 1, [43, 47, 50]],
+];
+let gChordsOK = 0;
+for (const [played, gain, target = gTarget] of gCases) {
+  const parts = played.map(m => [shift(by[m - m % 3], m % 3), SR * 0.35, m === 55 ? gain : 1]);
+  const events = run(mix(parts, Math.round(SR * 0.9)), target);
+  const got = events[0]?.notes || [];
+  const matches = got.length === target.length && target.every(m => got.includes(m));
+  const correct = played.length === target.length && target.every(m => played.includes(m));
+  if (events.length === 1 && matches === correct) gChordsOK++;
+  else bad.push(`Sol en accord ${played.map(nm).join("-")} -> ${got.map(nm).join(",")}`);
+}
+console.log(`Sol en accord, versions exactes et refus : ${gChordsOK}/${gCases.length}`);
+seed = seedBeforeG;
 // note tenue puis nouvelle note par-dessus : 2 attaques attendues, la 2e reconnue
 let sok = 0, stot = 0;
 for (const [a, b] of [[60, 64 - 1], [57, 60], [48, 54], [69, 72], [63, 66], [60, 60], [45, 45], [72, 60], [54, 51]]) {
@@ -195,6 +228,6 @@ console.log(`Bruits sans note ignorés : ${nok}/${bursts.length}`);
 console.log(`Avec réverbération : ${rok}/${rtot}`);
 if (process.argv.includes("-v") || bad.length) console.log(bad.join("\n"));
 fs.rmSync(tmp, {recursive: true});
-const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
+const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && gNotesOK === 6 && gChordsOK === gCases.length && sok === stot && rok === rtot && nok === bursts.length;
 console.log(pass ? "OK" : "ÉCHEC");
 process.exit(pass ? 0 : 1);

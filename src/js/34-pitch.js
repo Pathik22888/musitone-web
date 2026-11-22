@@ -69,7 +69,7 @@ function pitchScore(pk, m) {
 }
 
 // Une octave réelle renforce plusieurs harmoniques paires de la basse.
-function octaveEvidence(peaks, lower, other, bw) {
+function octaveEvidence(peaks, lower, other, bw, strict = true) {
   const f = 440 * 2 ** ((lower - 69) / 12);
   const harmonic = (base, h) => base * h * Math.sqrt(1 + PITCH.B * h * h);
   const otherBases = other.map(m => 440 * 2 ** ((m - 69) / 12));
@@ -89,7 +89,10 @@ function octaveEvidence(peaks, lower, other, bw) {
   let evidence = 0, strong = false, odd = false;
   for (let h = 2; h <= 5; h++) {
     const amp = amplitude(harmonic(f * 2, h), true);
-    const neighbours = Math.max(amplitude(harmonic(f, h * 2 - 1), false), amplitude(harmonic(f, h * 2 + 1), false));
+    const neighbours = Math.max(
+      amplitude(harmonic(f, h * 2 - 1), !strict),
+      amplitude(harmonic(f, h * 2 + 1), !strict)
+    );
     // Une harmonique impaire de l'octave haute aide à écarter un son joué deux octaves au-dessus.
     if (h % 2 && amp >= Math.max(0.07, 0.36 * neighbours)) odd = true;
     if (amp >= Math.max(0.045, 0.75 * neighbours)) {
@@ -97,7 +100,22 @@ function octaveEvidence(peaks, lower, other, bw) {
       if (amp >= Math.max(0.26, 1.7 * neighbours) && h <= 3) strong = true;
     }
   }
-  return strong && odd && evidence >= 2;
+  return strong && (!strict || (odd && evidence >= 2));
+}
+
+/* Confirme une note faible avec sa fondamentale et un partiel que les autres notes n'expliquent pas. */
+function quietNoteEvidence(pk, m, other, bw) {
+  const root = 440 * 2 ** ((m - 69) / 12);
+  const bases = other.map(n => 440 * 2 ** ((n - 69) / 12));
+  const peak = (h, min) => {
+    const f = root * h * Math.sqrt(1 + PITCH.B * h * h);
+    return pk.some(p => p.a0 >= min && Math.abs(p.f - f) <= Math.max(bw * 0.85, f * 0.023) &&
+      !bases.some(base => {
+        const k = Math.round(p.f / base);
+        return k > 0 && Math.abs(p.f - base * k * Math.sqrt(1 + PITCH.B * k * k)) <= Math.max(bw, p.f * 0.019);
+      }));
+  };
+  return peak(1, 0.036) && (peak(2, 0.12) || peak(3, 0.12) || peak(4, 0.12));
 }
 
 /* notes entendues (numéros MIDI, la plus forte d'abord), au plus `max` notes */
@@ -140,6 +158,35 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
   /* un bruit (coup, voix, claquement) a un spectre sans harmoniques : les notes trouvées n'en expliquent qu'une petite part */
   const left = pk.reduce((sum, p) => sum + Math.pow(p.a, PITCH.P), 0);
   if (out.length && 1 - left / all < PITCH.expl) return [];
+  // Récupère une seule note masquée, sans effacer une vraie note surnuméraire.
+  if (expected.length > 1) {
+    const missing = expected.filter(m => !out.some(note => note.m === m));
+    const extras = out.filter(note => !expected.includes(note.m));
+    if (missing.length === 2 && extras.length === 1 && out.length > extras.length &&
+        missing.every(m => m >= PITCH.lo && m <= PITCH.hi)) {
+      const extra = extras[0];
+      const shadowed = missing.find(m => m - 12 === extra.m);
+      // Un sous-harmonique peut prendre la place de deux notes de l'accord.
+      // Il doit manquer d'appui propre et les deux notes attendues doivent en avoir.
+      if (shadowed !== undefined && !quietNoteEvidence(pk, extra.m, expected, sr / n) &&
+          missing.every(m => quietNoteEvidence(pk, m, expected.filter(n => n !== m), sr / n)) &&
+          out.length + 1 <= max) {
+        extra.m = shadowed;
+        out.push({m: missing.find(m => m !== shadowed), s: 0});
+      }
+    }
+    if (missing.length === 1 && extras.length <= 1) {
+      const m = missing[0];
+      const extra = extras[0];
+      const other = out.filter(note => note !== extra).map(note => note.m);
+      if (m >= PITCH.lo && m <= PITCH.hi && (!extra || Math.abs(extra.m - m) === 12) &&
+          quietNoteEvidence(pk, m, other, sr / n) &&
+          (!extra || extra.m < m || !octaveEvidence(pk, m, other, sr / n, false))) {
+        if (extra) extra.m = m;
+        else if (out.length < max) out.push({m, s: 0});
+      }
+    }
+  }
   if (out.length && out.every(note => expected.includes(note.m))) {
     const heard = out.map(note => note.m);
     for (const m of expected) {
