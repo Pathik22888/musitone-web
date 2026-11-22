@@ -31,7 +31,10 @@ function pitchScore(pk, m) {
   const f0 = 440 * Math.pow(2, (m - 69) / 12);
   let s = 0,
     hits = 0,
-    low = 0;
+    low = 0,
+    lowPartial = 0,
+    fundamental = null,
+    independent = 0;
   const used = [];
   for (let h = 1; h <= PITCH.H; h++) {
     const fh = f0 * h * Math.sqrt(1 + PITCH.B * h * h);
@@ -48,6 +51,9 @@ function pitchScore(pk, m) {
     }
     if (bj >= 0) {
       s += Math.pow(pk[bj].a, PITCH.P) * Math.pow(h, -0.3); // ce qui n'est pas déjà expliqué par une note trouvée
+      if (h <= 2) lowPartial = Math.max(lowPartial, pk[bj].a0);
+      if (h === 1) fundamental = pk[bj];
+      if (pk[bj].a >= 0.07 && pk[bj].a === pk[bj].a0 && !used.includes(bj)) independent++;
       hits++;
       if (h <= 3 && ba >= 0.05) low++;
       used.push(bj);
@@ -56,34 +62,45 @@ function pitchScore(pk, m) {
     if (h <= 4 && ba < 0.05) s -= h === 1 && f0 < 110 ? 0.03 : PITCH.miss;
   }
   const ok = low > 0 && (hits >= 2 || f0 > 1500);
-  return {m, s: ok ? s : -1, used};
+  // Une fondamentale manquante est courante dans le grave. Plus haut, plusieurs
+  // notes d'un accord peuvent fabriquer les harmoniques d'une basse absente.
+  if (lowPartial < 0.05 || (m >= 48 && (fundamental?.a0 ?? 0) < 0.05)) s *= 0.45;
+  return {m, s: ok ? s : -1, used, fundamental: fundamental?.a ?? 0, independent};
 }
 
 /* notes entendues (numéros MIDI, la plus forte d'abord), au plus `max` notes */
-function pitchDetect(db, sr, n, max = 3) {
+function pitchDetect(db, sr, n, max = 8) {
   const pk = pitchPeaks(db, sr, n);
+  // Un claquement répartit son énergie sur beaucoup de pics. Sans ce filtre,
+  // plusieurs candidats peuvent finir par expliquer assez de bruit pour passer.
+  const power = pk.map(p => Math.pow(p.a0, PITCH.P)).sort((a, b) => b - a);
+  const all = power.reduce((sum, value) => sum + value, 0);
+  const strongest = power.slice(0, 12).reduce((sum, value) => sum + value, 0);
+  if (strongest < all * 0.45) return [];
+
   const out = [];
   let first = 0;
   for (let it = 0; it < max && pk.length; it++) {
-    let best = null;
+    let best = null,
+      fallback = null;
     for (let m = PITCH.lo; m <= PITCH.hi; m++) {
-      if (out.some(o => Math.abs(o.m - m) % 12 === 0 || Math.abs(o.m - m) === 19)) continue;
+      if (out.some(o => o.m === m)) continue;
+      const related = out.some(o => Math.abs(o.m - m) % 12 === 0 || Math.abs(o.m - m) === 19);
       const c = pitchScore(pk, m);
-      if (!best || c.s > best.s) best = c;
+      if (!related && (!best || c.s > best.s)) best = c;
+      // Un candidat faible ou apparenté doit avoir sa propre fondamentale et
+      // d'autres pics qui n'ont pas déjà servi à expliquer les notes retenues.
+      if (it && c.s >= 0.08 && c.fundamental >= 0.25 && c.independent >= 2 && (!fallback || c.s > fallback.s))
+        fallback = c;
     }
+    if (it && (!best || best.s < Math.min(PITCH.keep * first, PITCH.abs))) best = fallback;
     if (!best || best.s <= 0) break;
     if (it === 0) first = best.s;
-    else if (best.s < Math.min(PITCH.keep * first, PITCH.abs)) break;
     out.push({m: best.m, s: best.s});
     for (const j of best.used) pk[j].a *= 0.15;
   }
   /* un bruit (coup, voix, claquement) a un spectre sans harmoniques : les notes trouvées n'en expliquent qu'une petite part */
-  let all = 0,
-    left = 0;
-  for (const p of pk) {
-    all += Math.pow(p.a0, PITCH.P);
-    left += Math.pow(p.a, PITCH.P);
-  }
+  const left = pk.reduce((sum, p) => sum + Math.pow(p.a, PITCH.P), 0);
   if (out.length && 1 - left / all < PITCH.expl) return [];
   return out;
 }
@@ -120,10 +137,15 @@ function pitchTracker(sr, n) {
         flux /= tot;
       }
       const hit = rms > gate && flux > PITCH.flux && now - last > 220;
+      let finished = null;
+      if (ev && !ev.done && (hit || now - ev.t > 260)) {
+        ev.done = true;
+        finished = ev.notes;
+      }
       if (hit) {
         const ref = new Float32Array(L);
         for (const h of old) for (let k = 0; k < L; k++) if (h.lin[k] > ref[k]) ref[k] = h.lin[k];
-        ev = {t: now, ref, acc: new Float32Array(L), c: 0, notes: []};
+        ev = {t: now, ref, acc: new Float32Array(L), c: 0, notes: [], done: false};
         last = now;
       }
       hist.push({t: now, lin});
@@ -134,7 +156,7 @@ function pitchTracker(sr, n) {
         for (let k = 0; k < L; k++) out[i0 + k] = 20 * Math.log10(ev.acc[k] / ev.c + 1e-12);
         if (ev.c >= 2) ev.notes = pitchDetect(out, sr, n).map(p => p.m);
       }
-      return {hit, notes: ev ? ev.notes : null, live: !!ev && now - ev.t <= 260, gate, flux};
+      return {hit, notes: ev ? ev.notes : null, live: !!ev && !ev.done, finished, gate, flux};
     }
   };
 }

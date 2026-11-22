@@ -233,8 +233,60 @@ def jouer_micro(b, url):
     return pg
 
 
-jouer_micro.mic = "wav"
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro]
+def accord_wav():
+    """Trois attaques au micro : accord incomplet, accord avec une note en trop, accord exact."""
+    import subprocess
+    import tempfile
+
+    out = Path(tempfile.gettempdir()) / "musitone_accord.wav"
+    p2 = ROOT / "public" / "piano2"
+    samples = {"E4": ("Ds4", 1), "A4": ("A4", 0), "F5": ("Ds5", 2), "B4": ("A4", 2)}
+    cmd = ["ffmpeg", "-loglevel", "error", "-y"]
+    filters = []
+    for delay, notes in [(2000, ["E4", "A4"]), (4200, ["E4", "A4", "F5", "B4"]), (6500, ["E4", "A4", "F5"])]:
+        for note in notes:
+            sample, semitones = samples[note]
+            i = len(filters)
+            cmd += ["-i", str(p2 / f"{sample}v13.mp3")]
+            gain = 0.4 if note == "E4" else 0.32
+            filters.append(
+                f"[{i}]asetrate=44100*{2 ** (semitones / 12):.8f},aresample=48000,"
+                f"atrim=duration=1.2,afade=t=out:st=0.9:d=0.3,volume={gain},adelay={delay}[n{i}]"
+            )
+    inputs = "".join(f"[n{i}]" for i in range(len(filters)))
+    filters.append(f"{inputs}amix=inputs={len(filters)}:normalize=0,apad=whole_dur=9")
+    subprocess.run(cmd + ["-filter_complex", ";".join(filters), "-ac", "1", "-ar", "48000", str(out)], check=True)
+    return str(out)
+
+
+def jouer_accord(b, url):
+    """Le micro valide seulement l'accord complet, sans note en trop."""
+    pg = new_page(b)
+    open_score(pg, url, "arp.png")
+    pg.click("#dPrac")
+    for _ in range(4):
+        pg.click("#prSkip")
+    assert pg.inner_text("#prNeed").split() == ["E4", "A4", "F5"]
+    assert pg.inner_text("#prPos").startswith("5 /")
+    for notes in [["E4", "A4"], ["E4", "A4", "B4", "F5"]]:
+        pg.wait_for_function(
+            """expected => {
+                const notes = Array.from(document.querySelectorAll('#prHeardN span'), n => n.textContent).sort();
+                return JSON.stringify(notes) === JSON.stringify(expected);
+            }""",
+            arg=sorted(notes),
+        )
+        pg.wait_for_timeout(350)
+        assert pg.inner_text("#prPos").startswith("5 /"), pg.inner_text("#prHeardN")
+    pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('6 /')")
+    assert sorted(n.replace(" ", "") for n in pg.locator("#prHeardN span").all_text_contents()) == ["A4", "E4", "F5"]
+    return pg
+
+
+jouer_accord.mic = accord_wav
+
+jouer_micro.mic = micro_wav
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_accord]
 
 
 def main():
@@ -244,7 +296,7 @@ def main():
     with serve(HTML.parent) as base:
         url = f"{base}/{HTML.name}"
         for f in todo:
-            with browser(mic=(micro_wav() if getattr(f, "mic", None) == "wav" else f is jouer)) as b:
+            with browser(mic=(f.mic() if hasattr(f, "mic") else f is jouer)) as b:
                 try:
                     pg = f(b, url)
                     assert not pg.errors, pg.errors

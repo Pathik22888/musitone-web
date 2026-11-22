@@ -10,9 +10,7 @@ const PR = {
   raf: 0,
   ok: 0,
   tr: null,
-  live: false,
-  judged: false,
-  heard: null
+  target: null
 };
 const PCN = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"],
   PCL = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
@@ -245,7 +243,7 @@ async function prMicStart() {
     PR.fb = new Float32Array(an.frequencyBinCount);
     PR.tb = new Float32Array(an.fftSize);
     PR.tr = pitchTracker(AC.sampleRate, an.fftSize);
-    PR.live = false;
+    PR.target = null;
     set("J'écoute votre piano", "live");
     prLoop();
   } catch (e) {
@@ -268,25 +266,19 @@ function prLoop() {
   an.getFloatFrequencyData(PR.fb);
   const r = PR.tr.feed(PR.fb, rms, performance.now());
   prLevel(rms / (r.gate * 5));
-  if (r.hit) PR.judged = false;
-  if (r.live && r.notes && r.notes.length) {
-    prHeard(r.notes);
-    if (!PR.judged && prJudge(r.notes)) {
-      PR.judged = true;
-      prNext(true);
-    }
-  } else if (PR.live && !PR.judged && PR.heard && PR.heard.length) {
-    PR.judged = true; // fin de l'écoute de cette attaque sans la bonne note
-    prWrong();
+  if (r.finished?.length && PR.target === PR.G[PR.k]) {
+    prHeard(r.finished);
+    if (prJudge(r.finished)) prNext(true);
+    else prWrong();
   }
-  PR.live = r.live;
+  if (r.hit) PR.target = PR.G[PR.k];
+  if (r.live && r.notes?.length && PR.target === PR.G[PR.k]) prHeard(r.notes);
 }
 /* affiche ce que le micro capte : les notes exactes (avec l'octave), dans leur couleur.
    Pleine = bonne note ; contour pointillé = bonne couleur mais pas la bonne octave ; contour = autre note */
 function prHeard(notes) {
   const box = $("prHeardN");
   if (!box) return;
-  PR.heard = notes;
   const g = PR.G[PR.k],
     ms = g ? g.ms : [],
     pcs = g ? g.pcs : [];
@@ -306,14 +298,10 @@ function prLevel(x) {
   const l = $("prLvl");
   if (l) l.style.transform = `scaleX(${Math.max(0, Math.min(1, x)).toFixed(3)})`;
 }
-/* bonne réponse : toutes les notes demandées entendues, à la bonne octave
-   (accord de plus de 3 notes : 3 notes justes et aucune fausse suffisent) */
+/* Toutes les notes de l'accord doivent être présentes, à la bonne octave. */
 function prJudge(notes) {
   const g = PR.G[PR.k];
-  if (!g) return false;
-  const hit = g.ms.filter(m => notes.includes(m)).length;
-  if (g.ms.length <= 3) return hit === g.ms.length;
-  return hit >= 3 && notes.every(m => g.ms.includes(m));
+  return !!g && g.ms.length === notes.length && notes.every(m => g.ms.includes(m));
 }
 
 $("dPrac").onclick = () => (PR.on ? prClose() : prOpen());

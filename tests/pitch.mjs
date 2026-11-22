@@ -121,6 +121,24 @@ for (const r of [48, 51, 54, 57, 60, 63, 66, 69, 72]) {
   if (good) cok++; else bad.push(`accord ${ch.map(nm).join("-")} -> ${got.map(nm).join(",")} (${evs.length} attaques)`);
 }
 console.log(`Accords : ${cok}/${ctot}`);
+// Accords usuels : vérifier les octaves et l'absence de notes fantômes.
+const chordCases = [
+  [60, 64, 67],
+  [60, 64, 67, 70],
+];
+let exactChords = 0;
+for (const chord of chordCases) {
+  const parts = chord.map((m, i) => {
+    const base = m - m % 3;
+    const gain = i === 0 ? 1 : i === 1 ? 0.8 : 0.7;
+    return [shift(by[base], m - base), SR * 0.4, gain];
+  });
+  const evs = run(mix(parts, Math.round(SR * 1.1)));
+  const got = evs[0]?.notes || [];
+  if (evs.length === 1 && got.length === chord.length && chord.every(m => got.includes(m))) exactChords++;
+  else bad.push(`accord ${chord.map(nm).join("-")} -> ${got.map(nm).join(",")} (${evs.length} attaques)`);
+}
+console.log(`Accords usuels, sans note en trop : ${exactChords}/${chordCases.length}`);
 // note tenue puis nouvelle note par-dessus : 2 attaques attendues, la 2e reconnue
 let sok = 0, stot = 0;
 for (const [a, b] of [[60, 64 - 1], [57, 60], [48, 54], [69, 72], [63, 66], [60, 60], [45, 45], [72, 60], [54, 51]]) {
@@ -161,6 +179,6 @@ console.log(`Bruits sans note ignorés : ${nok}/${bursts.length}`);
 console.log(`Avec réverbération : ${rok}/${rtot}`);
 if (process.argv.includes("-v") || bad.length) console.log(bad.join("\n"));
 fs.rmSync(tmp, {recursive: true});
-const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && sok === stot && rok === rtot && nok === bursts.length;
+const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && sok === stot && rok === rtot && nok === bursts.length;
 console.log(pass ? "OK" : "ÉCHEC");
 process.exit(pass ? 0 : 1);
