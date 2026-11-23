@@ -411,6 +411,39 @@ def jouer_octave_mains(b, url):
     return pg
 
 
+def allegretto_wav():
+    return chords_wav(
+        "musitone_allegretto.wav",
+        {"G3": ("Fs3", 1, 0.5), "B4": ("A4", 2, 0.4), "G4": ("Fs4", 1, 0.325), "G5": ("Fs5", 1, 0.325)},
+        [(2000, ["G3", "B4"]), (4200, ["G3", "B4"]), (4220, ["G5"]),
+         (6500, ["G3", "B4"]), (6520, ["G4"])],
+    )
+
+
+def jouer_allegretto(b, url):
+    pg = new_page(b)
+
+    def excerpt(route):
+        response = route.fetch()
+        html = response.text()
+        start = html.index("function prGroups()")
+        marker = "  for (const e of S.ev) {"
+        i = html.index(marker, start) + len(marker)
+        # Transpose les trois notes du premier accord de t2.png vers celles de l'Allegretto.
+        injected = "\n    if (e.t === 0 && e.m === 55) continue;\n    if (e.t === 0) e.m = ({48: 55, 52: 71, 60: 67})[e.m] ?? e.m;"
+        route.fulfill(response=response, body=html[:i] + injected + html[i:])
+
+    pg.route("**/test.html", excerpt)
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    assert pg.inner_text("#prNeed").split() == ["G3", "G4", "B4"]
+    pg.wait_for_timeout(5400)
+    assert pg.inner_text("#prPos").startswith("1 /")
+    pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=6500)
+    assert sorted(pg.locator("#prHeardN span").all_text_contents()) == ["B4", "G3", "G4"]
+    return pg
+
+
 def jouer_accord(b, url):
     """Le micro valide seulement l'accord complet, sans note en trop."""
     pg = new_page(b)
@@ -435,6 +468,7 @@ def jouer_accord(b, url):
     return pg
 
 
+jouer_allegretto.mic = allegretto_wav
 jouer_accord.mic = accord_wav
 jouer_deux_mains.mic = deux_mains_wav
 jouer_octave_mains.mic = octave_mains_wav
@@ -443,7 +477,7 @@ jouer_rapide.mic = rapide_wav
 jouer_justesse.mic = justesse_wav
 jouer_micro.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto]
 
 
 def main():

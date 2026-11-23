@@ -21025,13 +21025,16 @@ function octaveEvidence(peaks, lower, other, bw, strict = true) {
     }
     return value;
   };
-  let evidence = 0, strong = false, odd = false;
+  let evidence = 0, strong = false, odd = false, third = false, fourth = false;
   for (let h = 2; h <= 5; h++) {
     const amp = amplitude(harmonic(f * 2, h), true);
     const neighbours = Math.max(
       amplitude(harmonic(f, h * 2 - 1), !strict),
       amplitude(harmonic(f, h * 2 + 1), !strict)
     );
+    // Le troisième partiel distingue aussi l'octave d'une note deux octaves plus haut.
+    if (h === 3) third = amp >= Math.max(0.20, 0.58 * neighbours);
+    if (h === 4) fourth = amp >= Math.max(0.09, 0.30 * neighbours);
     // Une harmonique impaire de l'octave haute aide à écarter un son joué deux octaves au-dessus.
     if (h % 2 && amp >= Math.max(0.07, 0.36 * neighbours)) odd = true;
     if (amp >= Math.max(0.045, 0.75 * neighbours)) {
@@ -21039,7 +21042,8 @@ function octaveEvidence(peaks, lower, other, bw, strict = true) {
       if (amp >= Math.max(0.26, 1.7 * neighbours) && h <= 3) strong = true;
     }
   }
-  return strong && (!strict || (odd && evidence >= 2));
+  return (strong && (!strict || (odd && evidence >= 2))) ||
+    (strict && other.length > 0 && third && fourth);
 }
 
 /* Confirme une note faible avec sa fondamentale et un partiel que les autres notes n'expliquent pas. */
@@ -21076,6 +21080,22 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
       if (out.some(o => o.m === m)) continue;
       const related = out.some(o => Math.abs(o.m - m) % 12 === 0 || Math.abs(o.m - m) === 19);
       const c = pitchScore(pk, m);
+      // Un sous-harmonique peut capter les partiels des deux octaves.
+      // Sa fondamentale et ses partiels impairs doivent alors l'appuyer.
+      if (c.fundamental < 0.30 && expected.includes(m + 12) && expected.includes(m + 24) &&
+          pitchScore(pk, m + 12).fundamental >= 0.06) {
+        const root = 440 * 2 ** ((m - 69) / 12);
+        const hasOddPartial = [3, 5].some(h => {
+          const f = root * h * Math.sqrt(1 + PITCH.B * h * h);
+          return pk.some(p => p.a0 >= 0.06 && Math.abs(p.f - f) < Math.max(sr / n * 0.72, f * 0.012) &&
+            !expected.some(note => {
+              const base = 440 * 2 ** ((note - 69) / 12);
+              const order = Math.round(p.f / base);
+              return order > 0 && Math.abs(p.f - base * order) < Math.max(sr / n, p.f * 0.016);
+            }));
+        });
+        if (!hasOddPartial) continue;
+      }
       if (!related && (!best || c.s > best.s)) best = c;
       // Un candidat faible ou apparenté doit avoir sa propre fondamentale et
       // d'autres pics qui n'ont pas déjà servi à expliquer les notes retenues.

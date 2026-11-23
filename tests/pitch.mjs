@@ -152,6 +152,25 @@ for (const rightHand of [null, 72, 60]) {
   if (evs.length === 1 && matches === (rightHand === 60)) octavesOK++;
   else bad.push(`accord à l’octave (${rightHand === null ? "main gauche seule" : nm(rightHand)}) -> ${got.map(nm).join(",")}`);
 }
+// Premier accord de l'Allegretto : le Sol4 peut entrer juste après le Sol3.
+const allegretto = [55, 67, 71];
+const allegrettoCases = [
+  [null, 0, 0],
+  [79, 0.65, 20],
+  [67, 0.8, 20],
+  [67, 1, 0],
+];
+let allegrettoOK = 0;
+for (const [upper, gain, delay] of allegrettoCases) {
+  const parts = [[shift(by[54], 1), SR * 0.4, 1], [shift(by[69], 2), SR * 0.4, 0.8]];
+  if (upper !== null) parts.push([shift(by[upper - 1], 1), Math.round(SR * (0.4 + delay / 1000)), gain]);
+  const events = run(mix(parts, Math.round(SR * 1.1)), allegretto);
+  const got = events[0]?.notes || [];
+  const matches = got.length === allegretto.length && allegretto.every(m => got.includes(m));
+  if (events.length === 1 && matches === (upper === 67)) allegrettoOK++;
+  else bad.push(`Allegretto (${upper === null ? "Sol aigu absent" : nm(upper)}, gain ${gain}) -> ${got.map(nm).join(",")}`);
+}
+console.log(`Allegretto, accord complet et refus : ${allegrettoOK}/${allegrettoCases.length}`);
 // Les cas de réverbération conservent leur bruit de référence.
 seed = seedBeforeOctaves;
 console.log(`Accord à l’octave, version exacte et refus : ${octavesOK}/3`);
@@ -270,6 +289,6 @@ console.log(`Bruits sans note ignorés : ${nok}/${bursts.length}`);
 console.log(`Avec réverbération : ${rok}/${rtot}`);
 if (process.argv.includes("-v") || bad.length) console.log(bad.join("\n"));
 fs.rmSync(tmp, {recursive: true});
-const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && gNotesOK === 6 && gChordsOK === gCases.length && quickOK === quickSequences.length && tuningOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
+const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && allegrettoOK === allegrettoCases.length && gNotesOK === 6 && gChordsOK === gCases.length && quickOK === quickSequences.length && tuningOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
 console.log(pass ? "OK" : "ÉCHEC");
 process.exit(pass ? 0 : 1);
