@@ -185,6 +185,54 @@ for (const m of [31, 43, 55, 67, 79, 91]) {
 }
 console.log(`Sol joué doucement : ${gNotesOK}/6`);
 
+// Deux notes peuvent partager des partiels ou se masquer si l'une est plus douce.
+const pairCases = [
+  {target: [48, 55], played: [48, 55], gain: 0.5, delay: 25},
+  {target: [64, 71], played: [64, 71], gain: 0.5, delay: 25},
+  {target: [55, 74], played: [55, 74], gain: 0.5, delay: 25},
+  {target: [48, 60], played: [60, 48], gain: 0.28, delay: 0},
+  {target: [48, 55], played: [48], gain: 1, delay: 0},
+  {target: [48, 55], played: [48, 56], gain: 0.55, delay: 20},
+  {target: [55, 56], played: [55], gain: 1, delay: 0},
+  {target: [55, 59], played: [59], gain: 1, delay: 0},
+];
+let pairsOK = 0;
+for (const {target, played, gain, delay} of pairCases) {
+  seed = 7;
+  const parts = played.map((m, i) => [
+    shift(by[m - m % 3], m % 3),
+    SR * 0.4 + (i ? Math.round(SR * delay / 1000) : 0),
+    i ? gain : 1,
+  ]);
+  const evs = run(mix(parts, Math.round(SR * 0.8)), target);
+  const got = evs[0]?.notes || [];
+  const matches = got.length === target.length && target.every(m => got.includes(m));
+  const correct = played.length === target.length && target.every(m => played.includes(m));
+  if (evs.length === 1 && matches === correct) pairsOK++;
+  else bad.push(`Deux notes ${played.map(nm).join("-")} pour ${target.map(nm).join("-")} -> ${got.map(nm).join(",")}`);
+}
+seed = seedBeforeG;
+console.log(`Deux notes, accords complets et refus : ${pairsOK}/${pairCases.length}`);
+
+// Une paire fugace dans une FFT ne doit pas suffire à 120 images/s.
+function pairAfterFrames(count) {
+  let frames = 0;
+  const makeTracker = new Function("detect", code + "\npitchDetect = detect; return pitchTracker;");
+  const tracker = makeTracker(() => ++frames <= count ? [{m: 48}, {m: 55}] : [{m: 48}])(SR, N);
+  const quiet = new Float32Array(N / 2).fill(-160);
+  const struck = quiet.slice();
+  struck[22] = -40;
+  let finished;
+  for (let i = 0; i < 60; i++) {
+    const audible = i >= 12;
+    const result = tracker.feed(audible ? struck : quiet, audible ? 0.05 : 0.001, i * 1000 / 120, [48, 55]);
+    if (result.finished) finished = result.finished;
+  }
+  return finished?.join(",");
+}
+const pairStable = pairAfterFrames(3) === "48" && pairAfterFrames(4) === "48,55";
+if (!pairStable) bad.push("Confirmation d'un accord à 120 Hz");
+
 const gTarget = [55, 59, 62];
 const gCases = [
   [[55, 59, 62], 1],
@@ -289,6 +337,6 @@ console.log(`Bruits sans note ignorés : ${nok}/${bursts.length}`);
 console.log(`Avec réverbération : ${rok}/${rtot}`);
 if (process.argv.includes("-v") || bad.length) console.log(bad.join("\n"));
 fs.rmSync(tmp, {recursive: true});
-const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && allegrettoOK === allegrettoCases.length && gNotesOK === 6 && gChordsOK === gCases.length && quickOK === quickSequences.length && tuningOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
+const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && allegrettoOK === allegrettoCases.length && gNotesOK === 6 && gChordsOK === gCases.length && pairsOK === pairCases.length && pairStable && quickOK === quickSequences.length && tuningOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
 console.log(pass ? "OK" : "ÉCHEC");
 process.exit(pass ? 0 : 1);

@@ -21038,9 +21038,11 @@ function pitchScore(pk, m) {
   return {m, s: ok ? s : -1, used, fundamental: fundamental?.a ?? 0, independent};
 }
 
-// Une octave réelle renforce plusieurs harmoniques paires de la basse.
-function octaveEvidence(peaks, lower, other, bw, strict = true) {
+// L’octave et la douzième renforcent certains partiels de la basse.
+function harmonicIntervalEvidence(peaks, lower, other, bw, strict = true, interval = 12) {
   const f = 440 * 2 ** ((lower - 69) / 12);
+  const multiple = interval === 12 ? 2 : 3;
+  const upper = f * 2 ** (interval / 12);
   const harmonic = (base, h) => base * h * Math.sqrt(1 + PITCH.B * h * h);
   const otherBases = other.map(m => 440 * 2 ** ((m - 69) / 12));
   const amplitude = (frequency, rejectOther) => {
@@ -21058,12 +21060,12 @@ function octaveEvidence(peaks, lower, other, bw, strict = true) {
   };
   let evidence = 0, strong = false, odd = false, third = false, fourth = false;
   for (let h = 2; h <= 5; h++) {
-    const amp = amplitude(harmonic(f * 2, h), true);
+    const amp = amplitude(harmonic(upper, h), true);
     const neighbours = Math.max(
-      amplitude(harmonic(f, h * 2 - 1), !strict),
-      amplitude(harmonic(f, h * 2 + 1), !strict)
+      amplitude(harmonic(f, h * multiple - 1), !strict),
+      amplitude(harmonic(f, h * multiple + 1), !strict)
     );
-    // Le troisième partiel distingue aussi l'octave d'une note deux octaves plus haut.
+    // Deux partiels concordants aident quand le partiel dominant est masqué.
     if (h === 3) third = amp >= Math.max(0.20, 0.58 * neighbours);
     if (h === 4) fourth = amp >= Math.max(0.09, 0.30 * neighbours);
     // Une harmonique impaire de l'octave haute aide à écarter un son joué deux octaves au-dessus.
@@ -21074,11 +21076,11 @@ function octaveEvidence(peaks, lower, other, bw, strict = true) {
     }
   }
   return (strong && (!strict || (odd && evidence >= 2))) ||
-    (strict && other.length > 0 && third && fourth);
+    (strict && third && fourth);
 }
 
-/* Confirme une note faible avec sa fondamentale et un partiel que les autres notes n'expliquent pas. */
-function quietNoteEvidence(pk, m, other, bw) {
+/* Confirme une note avec sa fondamentale et des partiels que les autres touches n'expliquent pas. */
+function quietNoteEvidence(pk, m, other, bw, weakPair = false) {
   const root = 440 * 2 ** ((m - 69) / 12);
   const bases = other.map(n => 440 * 2 ** ((n - 69) / 12));
   const peak = (h, min) => {
@@ -21089,7 +21091,11 @@ function quietNoteEvidence(pk, m, other, bw) {
         return k > 0 && Math.abs(p.f - base * k * Math.sqrt(1 + PITCH.B * k * k)) <= Math.max(bw, p.f * 0.019);
       }));
   };
-  return peak(1, 0.036) && (peak(2, 0.12) || peak(3, 0.12) || peak(4, 0.12));
+  return peak(1, 0.036) && (peak(2, 0.12) || peak(3, 0.12) || peak(4, 0.12) ||
+    (weakPair && (
+      [2, 3, 4, 5, 6].filter(h => peak(h, 0.041)).length >= 2 ||
+      (peak(1, 0.09) && [2, 3, 4, 5].some(h => peak(h, 0.06)))
+    )));
 }
 
 /* notes entendues (numéros MIDI, la plus forte d'abord), au plus `max` notes */
@@ -21169,11 +21175,25 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
       const m = missing[0];
       const extra = extras[0];
       const other = out.filter(note => note !== extra).map(note => note.m);
+      const quietLower = expected.length === 2 && other.length === 1 && other[0] === m + 12;
       if (m >= PITCH.lo && m <= PITCH.hi && (!extra || Math.abs(extra.m - m) === 12) &&
-          quietNoteEvidence(pk, m, other, sr / n) &&
-          (!extra || extra.m < m || !octaveEvidence(pk, m, other, sr / n, false))) {
+          quietNoteEvidence(pk, m, other, sr / n, quietLower) &&
+          (!extra || extra.m < m || !harmonicIntervalEvidence(pk, m, other, sr / n, false))) {
         if (extra) extra.m = m;
         else if (out.length < max) out.push({m, s: 0});
+      }
+    }
+  }
+  if (expected.length === 2 && out.length === 1 && max >= 2) {
+    // La note douce doit avoir ses propres partiels, même si la première
+    // a capté l’essentiel de l’énergie du spectre.
+    const heard = out[0].m;
+    const heardClass = heard % 12;
+    const wanted = expected.find(m => m % 12 !== heardClass);
+    if (wanted >= PITCH.lo && wanted <= PITCH.hi && expected.some(m => m % 12 === heardClass)) {
+      if (quietNoteEvidence(pk, wanted, [heard], sr / n, true)) out.push({m: wanted, s: 0});
+      else if (wanted === heard + 19 && harmonicIntervalEvidence(pk, heard, [], sr / n, true, 19)) {
+        out.push({m: wanted, s: 0});
       }
     }
   }
@@ -21183,7 +21203,7 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
       const lower = m - 12;
       if (out.length >= max || m > PITCH.hi || heard.includes(m) || !heard.includes(lower)) continue;
       const other = heard.filter(note => note !== lower);
-      if (octaveEvidence(pk, lower, other, sr / n)) out.push({m, s: 0});
+      if (harmonicIntervalEvidence(pk, lower, other, sr / n)) out.push({m, s: 0});
     }
   }
   return out;
@@ -21277,21 +21297,32 @@ function pitchTracker(sr, n) {
       let finished = null;
       if (ev && !ev.done && (hit || fastDone || now - ev.t > 260)) {
         ev.done = true;
-        if (ev.previous.length) ev.notes = ev.previous;
+        // Une note confirmée peut s’éteindre avant l’autre. Garder la paire
+        // si la dernière mesure ne contient que ses notes.
+        if (ev.pair && ev.previous.every(m => ev.pair.includes(m))) ev.notes = ev.pair;
+        else if (ev.previous.length) ev.notes = ev.previous;
         finished = ev.notes;
       }
       if (hit) {
         const ref = new Float32Array(L);
         for (const h of old) for (let k = 0; k < L; k++) if (h.lin[k] > ref[k]) ref[k] = h.lin[k];
-        ev = {t: now, fast, ref, acc: new Float32Array(L), c: 0, previous: [], notes: [], done: false};
+        ev = {t: now, fast, ref, acc: new Float32Array(L), c: 0,
+          previous: [], previousAt: now, notes: [], pair: null, weight: 0, spectrumAt: now, done: false};
         last = now;
       }
       hist.push({t: now, lin});
       while (hist.length && hist[0].t < now - 200) hist.shift();
       if (ev && !ev.done && now - ev.t >= (ev.fast ? 55 : 45)) {
         ev.c++;
-        for (let k = 0; k < L; k++) ev.acc[k] += Math.max(0, lin[k] - ev.ref[k]);
-        for (let k = 0; k < L; k++) out[i0 + k] = 20 * Math.log10(ev.acc[k] / ev.c + 1e-12);
+        // Pour deux touches espacées, les images récentes rendent visible
+        // une deuxième attaque légèrement retardée. Garder toute la fenêtre
+        // pour les intervalles serrés, dont les partiels se séparent moins bien.
+        const spacedPair = expected?.length === 2 && Math.abs(expected[0] - expected[1]) >= 3;
+        const decay = spacedPair ? Math.exp((ev.spectrumAt - now) / 103) : 1;
+        ev.spectrumAt = now;
+        ev.weight = decay * ev.weight + 1;
+        for (let k = 0; k < L; k++) ev.acc[k] = decay * ev.acc[k] + Math.max(0, lin[k] - ev.ref[k]);
+        for (let k = 0; k < L; k++) out[i0 + k] = 20 * Math.log10(ev.acc[k] / ev.weight + 1e-12);
         if (ev.c >= 2) {
           const found = pitchDetect(out, sr, n, 8, expected);
           // La soustraction d'un son précédent peut laisser des pics aigus
@@ -21300,12 +21331,20 @@ function pitchTracker(sr, n) {
           const main = found[0]?.m;
           const notes = found.filter(p => !peaks || p.m < 84 || p.m < main + 12 ||
             quietNoteEvidence(peaks, p.m, [main], bw) ||
-            (p.m === main + 12 && octaveEvidence(peaks, main, [], bw, false))
+            (p.m === main + 12 && harmonicIntervalEvidence(peaks, main, [], bw, false))
           ).map(p => p.m);
           // Garder la dernière estimation confirmée sur deux analyses
           // pour les attaques dont la fin devient indétectable.
-          if (notes.length && notes.length === ev.previous.length && notes.every(m => ev.previous.includes(m))) {
+          const same = notes.length === ev.previous.length && notes.every(m => ev.previous.includes(m));
+          if (!same) ev.previousAt = now;
+          if (notes.length && same) {
             ev.notes = notes;
+            // Exiger aussi un intervalle de temps entre les mesures, y compris à 120 Hz.
+            if (expected?.length === 2 && notes.length === 2 && now - ev.previousAt >= 24 &&
+                (notes[0] % 12 === expected[0] % 12 && notes[1] % 12 === expected[1] % 12 ||
+                 notes[0] % 12 === expected[1] % 12 && notes[1] % 12 === expected[0] % 12)) {
+              ev.pair = notes;
+            }
           }
           ev.previous = notes;
         }
