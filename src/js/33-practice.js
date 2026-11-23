@@ -64,8 +64,11 @@ function prOpen() {
   if (!P) {
     P = document.createElement("div");
     P.id = "prPanel";
-    P.className = "prPanel";
-    P.innerHTML = `<div class="prTop"><span class="prMic" id="prMic"><i></i><b id="prMicT">Micro…</b></span><span class="prPos" id="prPos"></span><button type="button" id="prX" class="prX">Terminé</button></div>
+    P.className = "prPanel modePanel";
+    P.setAttribute("role", "region");
+    P.setAttribute("aria-labelledby", "prTitle");
+    P.innerHTML = `<div class="modeHead"><b id="prTitle">Jouer</b><button type="button" id="prX" class="modeDone">Terminé</button></div>
+    <div class="prTop"><span class="prMic" id="prMic"><i></i><b id="prMicT">Micro…</b></span><span class="prPos" id="prPos"></span></div>
     <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div><div class="prHeard" id="prHeard"><small>J'entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div></div>
     <div id="prTune" class="prTune">
       <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>

@@ -213,8 +213,9 @@ function setView(v) {
 }
 $("steps3").onclick = e => {
   const b = e.target.closest("button");
-  if (!b) return;
+  if (!b || b.hasAttribute("aria-current")) return;
   const k = b.dataset.s;
+  if (document.body.classList.contains("keymode")) keyMode(false);
   if (k === "1") staffFit({re: true});
   else if (k === "2") {
     keyMode(true);

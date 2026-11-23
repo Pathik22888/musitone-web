@@ -177,10 +177,17 @@ $("kpOk").onclick = () => {
     updKeyBar();
   } catch (e) {}
 };
+function setPreparationStep(step) {
+  for (const button of $("steps3").querySelectorAll("button")) {
+    if (Number(button.dataset.s) === step) button.setAttribute("aria-current", "step");
+    else button.removeAttribute("aria-current");
+  }
+}
 let keyGuide = false;
 function keyMode(on, guide) {
   if (on && typeof setView === "function") setView("c");
   document.body.classList.toggle("keymode", on);
+  setPreparationStep(on ? 2 : 3);
   closeSheet();
   hideHint();
   if (!on) {
@@ -338,7 +345,7 @@ function kmRender() {
   });
   $("kmSv").innerHTML = o;
   $("kmHint").innerHTML = K.n
-    ? `${K.src === "auto" ? "L’appli a lu " : ""}<b>${K.n} ${kmFlat ? "bémol" : "dièse"}${K.n > 1 ? "s" : ""}</b> → ${keyName(K).maj}. Pareil que sur votre partition ? Touchez <b>Terminé</b>.`
+    ? `${K.src === "auto" ? "L’appli a lu " : ""}<b>${K.n} ${kmFlat ? "bémol" : "dièse"}${K.n > 1 ? "s" : ""}</b> → ${keyName(K).maj}. Pareil que sur votre partition ? Touchez <b>Voir la partition</b>.`
     : `Regardez juste après la clé sur votre partition, puis touchez les mêmes signes ici. Aucun ? Touchez <b>Aucun</b>.`;
 }
 function kmShow() {

@@ -42,6 +42,7 @@ async function openFile(f, opt = {}) {
   try {
     $("keyBar").classList.remove("ready");
     document.body.classList.remove("keymode");
+    setPreparationStep(3);
     KEYOV = null;
     $("keySel").value = "auto";
   } catch (e) {}

@@ -32,13 +32,15 @@ def etapes(b, url):
     pg.set_input_files("#file", str(ROOT / "tests/images/bj.png"))
     pg.wait_for_selector("#sf.on", timeout=60000)
     assert "Étape 1" in pg.text_content("#sfTitle")
+    assert pg.inner_text("#staffSteps [aria-current=step]").strip().endswith("Portées")
     pg.click("#sfNext")
     pg.wait_for_selector("#kmDone", state="visible", timeout=60000)
     assert pg.text_content("#kmStep") == "Étape 2 · La gamme"
+    assert pg.is_visible('#steps3 [data-s="2"][aria-current=step]')
     assert pg.is_visible("#keyBar"), "le clavier du morceau doit s'afficher à l'étape 2"
     pg.click("#kmDone")
     pg.wait_for_timeout(600)
-    assert pg.is_visible("#steps3") and not pg.is_visible("#keyBar")
+    assert pg.is_visible('#steps3 [data-s="3"][aria-current=step]') and not pg.is_visible("#keyBar")
     return pg
 
 
@@ -198,6 +200,59 @@ def jouer(b, url):
     assert not is_on(pg, "#pal"), "« Jouer » ne doit pas ouvrir la correction"
     pg.click("#prX")
     assert not body_has(pg, "practice")
+    return pg
+
+
+def structure(b, url):
+    """Les trois panneaux se ferment de la même façon sur un écran étroit."""
+    pg = new_page(b)
+    pg.set_viewport_size({"width": 360, "height": 800})
+    open_score(pg, url, "bj.png")
+
+    assert pg.evaluate("""() => Array.from(document.querySelectorAll('#dock button')).every(button => {
+        const label = button.querySelector('span').getBoundingClientRect();
+        const bounds = button.getBoundingClientRect();
+        return label.left >= bounds.left && label.right <= bounds.right;
+    })""")
+    pg.click('#steps3 [data-s="2"]')
+    assert pg.is_visible('#steps3 [data-s="2"][aria-current=step]')
+    pg.click('#steps3 [data-s="3"]')
+    assert pg.is_visible('#steps3 [data-s="3"][aria-current=step]')
+
+    def finish(panel, title, done):
+        region = pg.get_by_role("region", name=title, exact=True)
+        assert region.is_visible()
+        button = region.get_by_role("button", name="Terminé", exact=True)
+        bounds = button.bounding_box()
+        head = pg.locator(panel + " .modeHead").bounding_box()
+        assert bounds["height"] >= 44 and bounds["x"] + bounds["width"] <= 360
+        assert abs(bounds["y"] - head["y"]) <= 1
+        pg.click(done)
+        pg.wait_for_selector(panel, state="hidden")
+        assert pg.is_visible('#steps3 [data-s="3"][aria-current=step]')
+
+    pg.click("#dPlay")
+    pg.wait_for_selector("#plBar")
+    pg.click("#plPause")
+    finish("#plBar", "Lecture", "#plStop")
+
+    pg.click("#dPrac")
+    finish("#prPanel", "Jouer", "#prX")
+
+    pg.click("#dFix")
+    assert pg.inner_text("#coach .modeHead b") == "Correction"
+    pg.click("#cOk")
+    point = pg.evaluate("""() => {
+        const r = document.querySelector('#cv').getBoundingClientRect();
+        const visible = document.querySelector('#view').getBoundingClientRect();
+        const page = __mt.pages()[0];
+        return page.notes.map(n => [r.left + n.x * r.width / page.W, r.top + n.y * r.height / page.H])
+          .find(([x, y]) => x > 45 && x < visible.right - 65 && y > visible.top + 30 && y < visible.bottom - 110);
+    }""")
+    assert point
+    pg.touchscreen.tap(*point)
+    pg.wait_for_selector("#pal.on")
+    finish("#pal", "Correction", "#pX")
     return pg
 
 
@@ -477,7 +532,7 @@ jouer_rapide.mic = rapide_wav
 jouer_justesse.mic = justesse_wav
 jouer_micro.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, structure]
 
 
 def main():
@@ -487,7 +542,7 @@ def main():
     with serve(HTML.parent) as base:
         url = f"{base}/{HTML.name}"
         for f in todo:
-            with browser(mic=(f.mic() if hasattr(f, "mic") else f is jouer)) as b:
+            with browser(mic=(f.mic() if hasattr(f, "mic") else f in (jouer, structure))) as b:
                 try:
                     pg = f(b, url)
                     assert not pg.errors, pg.errors

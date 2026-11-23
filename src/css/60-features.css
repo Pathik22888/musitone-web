@@ -660,53 +660,52 @@ body.home header.app {
   display: none;
 }
 .steps3 {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   margin: 0 0 8px;
+  padding: 0;
   flex: none;
 }
-.steps3 button {
-  flex: 1;
+.steps3 button,
+.steps3 li {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 4px 8px;
+  gap: 5px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.05);
   color: #c9cfe8;
-  font:
-    700 13.5px Figtree,
-    system-ui,
-    sans-serif;
+  font: 700 13px Figtree, system-ui, sans-serif;
 }
 .steps3 i {
-  font-style: normal;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  flex: none;
+  width: 21px;
+  height: 21px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  font-style: normal;
   font-size: 12px;
-  font-weight: 800;
 }
-.steps3 button.on {
+.steps3 [aria-current="step"] {
   background: #fff;
   color: #151a3b;
   border-color: #fff;
 }
-.steps3 button.on i {
-  background: linear-gradient(135deg, #2f80ff, #a66cff);
+.steps3 [aria-current="step"] i {
+  background: #e5edff;
+  color: #244b9a;
 }
-body.keymode #steps3,
 body.mxv #steps3,
-body.playing #steps3,
-body.editing #steps3 {
-  display: none !important;
+body.plOpen #steps3,
+body.editing:not(.keymode) #steps3 {
+  display: none;
 }
 #fzin,
 #fzout {
@@ -716,80 +715,6 @@ body.editing #steps3 {
   background: #f2b705;
   color: #2a1d00;
   border-color: #f2b705;
-}
-.steps3 button {
-  min-height: 46px;
-  padding: 5px 6px;
-  gap: 6px;
-  justify-content: flex-start;
-}
-.steps3 span {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.1;
-  min-width: 0;
-}
-.steps3 span b {
-  font-size: 14px;
-  font-weight: 800;
-}
-.steps3 span small {
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0.72;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-.steps3 button:not(.on) i {
-  background: rgba(53, 214, 107, 0.22);
-  color: #5be38a;
-}
-.steps3 button:not(.on) i {
-  font-size: 0;
-}
-.steps3 button:not(.on) i::before {
-  content: "✓";
-  font-size: 12px;
-}
-.steps3 button {
-  position: relative;
-}
-.steps3 svg.stIc {
-  width: 30px;
-  height: 24px;
-  flex: none;
-  border-radius: 5px;
-  stroke: none;
-  fill: none;
-  stroke-width: 1;
-}
-.steps3 button.on .stIc line[stroke="#fff"] {
-  stroke: #151a3b;
-}
-.steps3 button.on .stIc ellipse[fill="#fff"] {
-  fill: #151a3b;
-}
-.steps3 button i {
-  position: absolute;
-  left: 27px;
-  bottom: 2px;
-  top: auto;
-  width: 16px !important;
-  height: 16px !important;
-  font-size: 9px !important;
-  border: 2px solid #0d1124;
-}
-.steps3 button.on i {
-  border-color: #fff;
-}
-.steps3 button:not(.on) i {
-  font-size: 0 !important;
-}
-.steps3 button:not(.on) i::before {
-  font-size: 9px !important;
 }
 #fzclef {
   display: none !important;
@@ -914,14 +839,111 @@ body.practice #steps3 {
   color: #9aa3c7;
   font-weight: 700;
 }
-.prX {
-  min-height: 38px;
+@media (max-width: 480px) {
+  .dock {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    width: calc(100% - 20px);
+    gap: 3px;
+  }
+  .dock button,
+  .dock .share {
+    min-width: 0;
+    padding-inline: 2px;
+    font-size: clamp(10px, 3.1vw, 13px);
+    border-radius: 15px;
+  }
+}
+.modeHead {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modeHead > b {
+  font-size: 17px;
+  font-weight: 800;
+}
+.modeHead .modeDone,
+#coach .modeDone {
+  min-height: 44px;
   padding: 0 14px;
-  border-radius: 12px;
   border: 0;
+  border-radius: 12px;
   background: #fff;
   color: #151a3b;
   font-weight: 800;
+  box-shadow: none;
+}
+#pal {
+  padding-inline: 14px;
+  border-radius: 24px 24px 0 0;
+}
+#pal .modeHead {
+  margin-bottom: 8px;
+}
+body.working #coach {
+  right: 12px;
+  background: #0f1330;
+  color: #fff;
+}
+body.working #coach #cOk {
+  background: #fff;
+}
+#coach .cAct {
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+}
+.modePanel,
+#pal {
+  background: #0f1330;
+  color: #fff;
+}
+body.plOpen #dock,
+body.plOpen #coach {
+  display: none;
+}
+#plBar {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: none;
+  width: auto;
+  justify-content: center;
+  padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+  gap: 8px;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -14px 40px rgba(0, 0, 0, 0.35);
+}
+#plBar .plSeekRow button,
+#plBar .plT button {
+  min-width: 44px;
+  min-height: 44px;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+#plBar .mxqPos,
+#plBar .plT small {
+  color: #c9cfe8;
+}
+#plPause {
+  background: #fff;
+  color: #151a3b;
+}
+body.keymode .kmBar {
+  background: #0f1330;
+  flex-wrap: wrap;
+}
+body.keymode .kmBar .kmBtns {
+  flex-direction: row;
+  justify-content: flex-end;
+  width: 100%;
+}
+.kmBar button {
+  min-height: 44px;
 }
 .prNow {
   display: flex;
