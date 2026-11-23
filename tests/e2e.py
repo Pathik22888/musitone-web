@@ -131,16 +131,13 @@ def lecture(b, url):
     pg = new_page(b)
     open_score(pg, url, "bj.png")
     pg.click("#dPlay")
-    pg.wait_for_timeout(2500)
+    pg.wait_for_function("() => (__mt.pl()?.b ?? 0) > 0.5", timeout=20000)
     p0 = pg.evaluate("__mt.pl()")
-    assert p0 and p0["b"] > 0.5, p0
     vb = pg.locator("#view").bounding_box()
     # au début de l'écoute la vue est en haut de la page : le milieu de l'écran est une ligne plus loin
     # (le panneau de lecture couvre le bas de l'écran)
     pg.touchscreen.tap(vb["x"] + vb["width"] * 0.5, vb["y"] + vb["height"] * 0.5)
-    pg.wait_for_timeout(600)
-    p1 = pg.evaluate("__mt.pl()")
-    assert p1["b"] > p0["b"] + 6, (p0, p1)
+    pg.wait_for_function("beat => (__mt.pl()?.b ?? 0) > beat + 6", arg=p0["b"], timeout=3000)
     return pg
 
 
@@ -200,6 +197,51 @@ def jouer(b, url):
     assert not is_on(pg, "#pal"), "« Jouer » ne doit pas ouvrir la correction"
     pg.click("#prX")
     assert not body_has(pg, "practice")
+    return pg
+
+
+def jouer_ligne(b, url):
+    """En zoom, Jouer revient à gauche et descend jusqu'à la ligne suivante."""
+    pg = new_page(b)
+    open_score(pg, url, "arp.png")
+    pg.evaluate("""() => {
+        for (let i = 0; i < 3; i++) document.querySelector("#zin").click();
+    }""")
+    steps = pg.evaluate("""() => {
+        const song = __mt.sn();
+        const beats = [...new Set(song.ev.map(e => e.t))];
+        const first = beats.findIndex(t => t >= (song.sys[1]?.t0 ?? Infinity));
+        if (first < 1) return null;
+        const before = song.ev.find(e => e.t === beats[first - 1]).n;
+        const after = song.ev.filter(e => e.t === beats[first]).map(e => e.n);
+        return {first, before: {x: before.x, y: before.y}, after: after.map(n => ({x: n.x, y: n.y}))};
+    }""")
+    assert steps
+    pg.click("#dPrac")
+    pg.evaluate("""({first, before}) => {
+        const skip = document.querySelector("#prSkip");
+        for (let i = 1; i < first; i++) skip.click();
+        const view = document.querySelector("#view");
+        const canvas = document.querySelector("#cv");
+        const page = __mt.pages()[0];
+        view.scrollTo({left: before.x * canvas.clientWidth / page.W - 80,
+                       top: before.y * canvas.clientHeight / page.H - 60, behavior: "instant"});
+    }""", steps)
+    pg.wait_for_timeout(550)
+    before = pg.evaluate("() => [document.querySelector('#view').scrollLeft, document.querySelector('#view').scrollTop]")
+    pg.click("#prSkip")
+    pg.wait_for_function("""({after, before}) => {
+        const view = document.querySelector("#view");
+        const r = document.querySelector("#cv").getBoundingClientRect();
+        const v = view.getBoundingClientRect();
+        const page = __mt.pages()[0];
+        const bottom = Math.min(v.bottom, document.querySelector("#prPanel").getBoundingClientRect().top);
+        return view.scrollLeft < before[0] && view.scrollTop > before[1] && after.every(n => {
+            const x = r.left + n.x * r.width / page.W, y = r.top + n.y * r.height / page.H;
+            return x >= v.left && x <= v.right && y >= v.top && y <= bottom;
+        });
+    }""", arg={"after": steps["after"], "before": before}, timeout=2500)
+    assert pg.inner_text("#prPos").startswith(f"{steps['first'] + 1} /")
     return pg
 
 
@@ -383,7 +425,7 @@ def jouer_micro_bref(b, url):
     return pg
 
 
-def chords_wav(name, samples, attempts):
+def chords_wav(name, samples, attempts, echo=False):
     import subprocess
     import tempfile
 
@@ -401,7 +443,8 @@ def chords_wav(name, samples, attempts):
                 f"atrim=duration=1.2,afade=t=out:st=0.9:d=0.3,volume={gain},adelay={delay}[n{i}]"
             )
     inputs = "".join(f"[n{i}]" for i in range(len(filters)))
-    filters.append(f"{inputs}amix=inputs={len(filters)}:normalize=0,apad=whole_dur=9")
+    room = ",aecho=0.8:0.85:31|67|103|149:0.35|0.24|0.19|0.16" if echo else ""
+    filters.append(f"{inputs}amix=inputs={len(filters)}:normalize=0{room},apad=whole_dur=9")
     subprocess.run(cmd + ["-filter_complex", ";".join(filters), "-ac", "1", "-ar", "48000", str(out)], check=True)
     return str(out)
 
@@ -537,6 +580,45 @@ def jouer_deux_notes(b, url):
     return pg
 
 
+def accord_resonant_wav():
+    return chords_wav(
+        "musitone_accord_resonant.wav",
+        {"C4": ("C4", 0, 0.33), "G3": ("Fs3", 1, 0.38),
+         "B3": ("A3", 2, 0.13), "D4": ("C4", 2, 0.38)},
+        [(2000, ["C4"]), (2340, ["G3"]), (2357, ["D4"]),
+         (6150, ["C4"]), (6490, ["G3"]), (6498, ["B3"]), (6507, ["D4"])],
+        echo=True,
+    )
+
+
+def jouer_accord_resonant(b, url):
+    """Un accord de Sol complet avance malgré l'écho du Do précédent."""
+    pg = new_page(b)
+
+    def excerpt(route):
+        response = route.fetch()
+        html = response.text()
+        start = html.index("function prGroups()")
+        marker = "  for (const e of S.ev) {"
+        i = html.index(marker, start) + len(marker)
+        injected = """
+    if (e.t === 0) {
+      if (e.m === 55) continue;
+      e.m = ({48: 55, 52: 59, 60: 62})[e.m] ?? e.m;
+    }"""
+        route.fulfill(response=response, body=html[:i] + injected + html[i:])
+
+    pg.route("**/test.html", excerpt)
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    assert pg.inner_text("#prNeed").split() == ["G3", "B3", "D4"]
+    pg.wait_for_timeout(4600)
+    assert pg.inner_text("#prPos").startswith("1 /")
+    pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=6000)
+    assert sorted(pg.locator("#prHeardN span.ok").all_text_contents()) == ["B3", "D4", "G3"]
+    return pg
+
+
 def jouer_accord(b, url):
     """Le micro valide seulement l'accord complet, sans note en trop."""
     pg = new_page(b)
@@ -563,6 +645,7 @@ def jouer_accord(b, url):
 
 jouer_allegretto.mic = allegretto_wav
 jouer_accord.mic = accord_wav
+jouer_accord_resonant.mic = accord_resonant_wav
 jouer_deux_mains.mic = deux_mains_wav
 jouer_octave_mains.mic = octave_mains_wav
 jouer_deux_notes.mic = deux_notes_wav
@@ -572,7 +655,7 @@ jouer_justesse.mic = justesse_wav
 jouer_octave_libre.mic = lambda: justesse_wav(3)
 jouer_micro.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, structure]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, jouer_ligne, jouer_accord_resonant, structure]
 
 
 def main():

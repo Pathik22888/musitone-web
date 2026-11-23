@@ -288,6 +288,45 @@ for (const score of quickSequences) {
 seed = seedBeforeQuick;
 console.log(`Passages à 180 ms, dont des notes répétées : ${quickOK}/${quickSequences.length}`);
 
+// Accords joués près d'une note précédente : réflexions à plusieurs retards.
+const roomCases = [
+  {score: [55, 59, 62], upper: 59, gain: 0.28, wet: false, good: true},
+  {score: [55, 59, 62], upper: null, gain: 0, wet: true, good: false},
+  {score: [55, 67, 71], upper: 67, gain: 0.58, wet: false, good: true},
+  {score: [55, 67, 71], upper: 67, gain: 0.28, wet: true, good: true},
+  {score: [55, 67, 71], upper: null, gain: 0, wet: true, good: false},
+  {score: [57, 61, 64], upper: 61, gain: 0.28, wet: true, good: true},
+  {score: [57, 61, 64], upper: 62, gain: 0.43, wet: true, good: false},
+];
+let roomOK = 0;
+for (const {score, upper, gain, wet, good} of roomCases) {
+  const note = m => shift(by[m - m % 3], m % 3);
+  const parts = wet ? [[by[60], Math.round(SR * 0.32), 0.75]] : [];
+  parts.push([note(score[0]), Math.round(SR * 0.66), 0.85]);
+  if (upper !== null) parts.push([note(upper), Math.round(SR * 0.66) + 400, gain]);
+  parts.push([note(score[2]), Math.round(SR * 0.66) + (upper === null ? 400 : 800), 0.85]);
+  const wetSignal = mix(parts, Math.round(SR * 1.45));
+  if (wet) {
+    const dry = wetSignal.slice();
+    for (const [ms, gain] of [[31, 0.35], [67, -0.24], [103, 0.19], [149, 0.16], [211, -0.12], [293, 0.09]]) {
+      const delay = Math.round(SR * ms / 1000);
+      for (let i = delay; i < dry.length; i++) wetSignal[i] += gain * dry[i - delay];
+    }
+  }
+  const tracker = pitchTracker(SR, N), heard = [];
+  for (let end = N; end < wetSignal.length; end += HOP) {
+    const expected = wet && !heard.length ? [60] : score;
+    const r = tracker.feed(spectrum(wetSignal, end), rms(wetSignal, end), end * 1000 / SR, expected, shortSpectrum(wetSignal, end));
+    if (r.finished?.length) heard.push(r.finished);
+  }
+  const got = heard[wet ? 1 : 0] ?? [];
+  const matches = got.length === score.length && score.every(m => got.includes(m));
+  if (heard.length === (wet ? 2 : 1) && (!wet || heard[0].join() === "60") && matches === good) roomOK++;
+  else bad.push(`accord ${score.map(nm).join("-")} (${upper === null ? "note absente" : nm(upper)}, écho ${wet}) -> ${heard.map(notes => notes.map(nm).join("+")).join(" puis ")}`);
+}
+seed = seedBeforeQuick;
+console.log(`Accords doux avec et sans réflexions : ${roomOK}/${roomCases.length}`);
+
 let tuningOK = 0;
 for (const cents of [-24, 0, 22]) {
   const f = 440 * 2 ** (cents / 1200);
@@ -337,6 +376,6 @@ console.log(`Bruits sans note ignorés : ${nok}/${bursts.length}`);
 console.log(`Avec réverbération : ${rok}/${rtot}`);
 if (process.argv.includes("-v") || bad.length) console.log(bad.join("\n"));
 fs.rmSync(tmp, {recursive: true});
-const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && allegrettoOK === allegrettoCases.length && gNotesOK === 6 && gChordsOK === gCases.length && pairsOK === pairCases.length && pairStable && quickOK === quickSequences.length && tuningOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
+const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && allegrettoOK === allegrettoCases.length && gNotesOK === 6 && gChordsOK === gCases.length && pairsOK === pairCases.length && pairStable && quickOK === quickSequences.length && roomOK === roomCases.length && tuningOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
 console.log(pass ? "OK" : "ÉCHEC");
 process.exit(pass ? 0 : 1);

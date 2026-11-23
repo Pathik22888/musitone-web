@@ -53,6 +53,7 @@ function prOpen() {
   document.body.classList.add("practice");
   PR.G = prGroups();
   PR.k = 0;
+  PR.follow = null;
   PR.ok = 0;
   if (!PR.G.length) {
     toast("Aucune note à jouer");
@@ -145,6 +146,7 @@ function prWrong() {
   }
 }
 async function prNext(good) {
+  if (!PR.on || PR.turning) return;
   if (good) PR.ok++;
   PR.tap = null;
   PR.k++;
@@ -199,26 +201,59 @@ function prShow() {
       c.stroke();
       c.restore();
     }
-    const S = songNow(),
-      cu = cursorAt(S, g.t);
+    const cu = cursorAt(songNow(), g.t);
     if (cu) {
+      // En mode Jouer, la cible est la note imprimée au temps courant.
+      // L'interpolation de la lecture peut encore pointer vers la barre précédente.
+      const xs = g.evs.filter(e => e.n?.s).map(e => e.n.x);
+      const x = xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : cu.x;
       c.save();
       c.fillStyle = "rgba(0,200,224,.12)";
-      c.fillRect(cu.x - 1.6 * cu.y.d, cu.y.top, 3.2 * cu.y.d, cu.y.bot - cu.y.top);
+      c.fillRect(x - 1.6 * cu.y.d, cu.y.top, 3.2 * cu.y.d, cu.y.bot - cu.y.top);
       c.restore();
-      const r = $("cv").getBoundingClientRect(),
-        v = $("view"),
-        vr = v.getBoundingClientRect(),
-        sx = r.left + (cu.x / pg.W) * r.width,
-        y0 = r.top + (cu.y.top / pg.H) * r.height,
-        y1 = r.top + (cu.y.bot / pg.H) * r.height,
-        pb = $("prPanel").getBoundingClientRect().top;
-      if (sx < vr.left + 30 || sx > vr.right - 40)
-        v.scrollBy({left: sx - vr.left - vr.width * 0.3, behavior: "smooth"});
-      if (y0 < vr.top + 10 || y1 > Math.min(vr.bottom, pb) - 20)
-        v.scrollBy({top: y0 - vr.top - 40, behavior: "smooth"});
+      prFollow(pg, cu.y, x, g.evs);
     }
   } catch (e) {}
+}
+function prFollow(pg, line, x, events) {
+  const v = $("view"),
+    vr = v.getBoundingClientRect(),
+    r = $("cv").getBoundingClientRect(),
+    panelTop = $("prPanel").getBoundingClientRect().top,
+    height = Math.min(vr.bottom, panelTop) - vr.top;
+  if (height <= 0) return;
+
+  const now = performance.now();
+  const pending = PR.follow?.view === v && PR.follow.page === pg &&
+    PR.follow.width === r.width && now < PR.follow.until ? PR.follow : null;
+  const baseLeft = pending?.left ?? v.scrollLeft,
+    baseTop = pending?.top ?? v.scrollTop;
+  const sx = r.left - vr.left + v.scrollLeft + (x / pg.W) * r.width;
+  const sheetTop = r.top - vr.top + v.scrollTop;
+  const scale = r.height / pg.H;
+  const y0 = sheetTop + line.top * scale;
+  const y1 = sheetTop + line.bot * scale;
+  const ys = events.filter(e => e.n?.s).map(e => e.n.y);
+  const middle = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : (line.top + line.bot) / 2;
+  const focusY = sheetTop + middle * scale;
+  const newLine = PR.follow?.line !== line || PR.follow?.page !== pg;
+
+  let left = baseLeft, top = baseTop;
+  if (sx < baseLeft + 30 || sx > baseLeft + vr.width - 40)
+    left = sx - vr.width * 0.28;
+  if (y1 - y0 <= height - 28) {
+    if (y0 < baseTop + 10 || y1 > baseTop + height - 18) top = y0 - Math.min(32, (height - (y1 - y0)) / 2);
+  } else if (newLine || focusY < baseTop + 20 || focusY > baseTop + height - 30) {
+    top = focusY - height * 0.40;
+  }
+  left = Math.max(0, Math.min(left, v.scrollWidth - v.clientWidth));
+  top = Math.max(0, Math.min(top, v.scrollHeight - v.clientHeight));
+  const move = Math.abs(left - baseLeft) >= 1 || Math.abs(top - baseTop) >= 1;
+  PR.follow = {view: v, page: pg, line, width: r.width, left, top, until: move ? now + 500 : pending?.until ?? now};
+  if (move) {
+    const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth";
+    v.scrollTo({left, top, behavior});
+  }
 }
 /* micro : on écoute le piano ; la reconnaissance des notes est dans 34-pitch.js */
 async function prMicStart() {

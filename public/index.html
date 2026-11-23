@@ -20677,6 +20677,7 @@ function prOpen() {
   document.body.classList.add("practice");
   PR.G = prGroups();
   PR.k = 0;
+  PR.follow = null;
   PR.ok = 0;
   if (!PR.G.length) {
     toast("Aucune note à jouer");
@@ -20769,6 +20770,7 @@ function prWrong() {
   }
 }
 async function prNext(good) {
+  if (!PR.on || PR.turning) return;
   if (good) PR.ok++;
   PR.tap = null;
   PR.k++;
@@ -20823,26 +20825,59 @@ function prShow() {
       c.stroke();
       c.restore();
     }
-    const S = songNow(),
-      cu = cursorAt(S, g.t);
+    const cu = cursorAt(songNow(), g.t);
     if (cu) {
+      // En mode Jouer, la cible est la note imprimée au temps courant.
+      // L'interpolation de la lecture peut encore pointer vers la barre précédente.
+      const xs = g.evs.filter(e => e.n?.s).map(e => e.n.x);
+      const x = xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : cu.x;
       c.save();
       c.fillStyle = "rgba(0,200,224,.12)";
-      c.fillRect(cu.x - 1.6 * cu.y.d, cu.y.top, 3.2 * cu.y.d, cu.y.bot - cu.y.top);
+      c.fillRect(x - 1.6 * cu.y.d, cu.y.top, 3.2 * cu.y.d, cu.y.bot - cu.y.top);
       c.restore();
-      const r = $("cv").getBoundingClientRect(),
-        v = $("view"),
-        vr = v.getBoundingClientRect(),
-        sx = r.left + (cu.x / pg.W) * r.width,
-        y0 = r.top + (cu.y.top / pg.H) * r.height,
-        y1 = r.top + (cu.y.bot / pg.H) * r.height,
-        pb = $("prPanel").getBoundingClientRect().top;
-      if (sx < vr.left + 30 || sx > vr.right - 40)
-        v.scrollBy({left: sx - vr.left - vr.width * 0.3, behavior: "smooth"});
-      if (y0 < vr.top + 10 || y1 > Math.min(vr.bottom, pb) - 20)
-        v.scrollBy({top: y0 - vr.top - 40, behavior: "smooth"});
+      prFollow(pg, cu.y, x, g.evs);
     }
   } catch (e) {}
+}
+function prFollow(pg, line, x, events) {
+  const v = $("view"),
+    vr = v.getBoundingClientRect(),
+    r = $("cv").getBoundingClientRect(),
+    panelTop = $("prPanel").getBoundingClientRect().top,
+    height = Math.min(vr.bottom, panelTop) - vr.top;
+  if (height <= 0) return;
+
+  const now = performance.now();
+  const pending = PR.follow?.view === v && PR.follow.page === pg &&
+    PR.follow.width === r.width && now < PR.follow.until ? PR.follow : null;
+  const baseLeft = pending?.left ?? v.scrollLeft,
+    baseTop = pending?.top ?? v.scrollTop;
+  const sx = r.left - vr.left + v.scrollLeft + (x / pg.W) * r.width;
+  const sheetTop = r.top - vr.top + v.scrollTop;
+  const scale = r.height / pg.H;
+  const y0 = sheetTop + line.top * scale;
+  const y1 = sheetTop + line.bot * scale;
+  const ys = events.filter(e => e.n?.s).map(e => e.n.y);
+  const middle = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : (line.top + line.bot) / 2;
+  const focusY = sheetTop + middle * scale;
+  const newLine = PR.follow?.line !== line || PR.follow?.page !== pg;
+
+  let left = baseLeft, top = baseTop;
+  if (sx < baseLeft + 30 || sx > baseLeft + vr.width - 40)
+    left = sx - vr.width * 0.28;
+  if (y1 - y0 <= height - 28) {
+    if (y0 < baseTop + 10 || y1 > baseTop + height - 18) top = y0 - Math.min(32, (height - (y1 - y0)) / 2);
+  } else if (newLine || focusY < baseTop + 20 || focusY > baseTop + height - 30) {
+    top = focusY - height * 0.40;
+  }
+  left = Math.max(0, Math.min(left, v.scrollWidth - v.clientWidth));
+  top = Math.max(0, Math.min(top, v.scrollHeight - v.clientHeight));
+  const move = Math.abs(left - baseLeft) >= 1 || Math.abs(top - baseTop) >= 1;
+  PR.follow = {view: v, page: pg, line, width: r.width, left, top, until: move ? now + 500 : pending?.until ?? now};
+  if (move) {
+    const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth";
+    v.scrollTo({left, top, behavior});
+  }
 }
 /* micro : on écoute le piano ; la reconnaissance des notes est dans 34-pitch.js */
 async function prMicStart() {
@@ -21058,7 +21093,7 @@ function harmonicIntervalEvidence(peaks, lower, other, bw, strict = true, interv
     }
     return value;
   };
-  let evidence = 0, strong = false, odd = false, third = false, fourth = false;
+  let evidence = 0, strong = false, odd = false, third = false, fourth = false, fifth = false;
   for (let h = 2; h <= 5; h++) {
     const amp = amplitude(harmonic(upper, h), true);
     const neighbours = Math.max(
@@ -21068,6 +21103,7 @@ function harmonicIntervalEvidence(peaks, lower, other, bw, strict = true, interv
     // Deux partiels concordants aident quand le partiel dominant est masqué.
     if (h === 3) third = amp >= Math.max(0.20, 0.58 * neighbours);
     if (h === 4) fourth = amp >= Math.max(0.09, 0.30 * neighbours);
+    if (h === 5) fifth = amp >= Math.max(0.11, 0.8 * neighbours);
     // Une harmonique impaire de l'octave haute aide à écarter un son joué deux octaves au-dessus.
     if (h % 2 && amp >= Math.max(0.07, 0.36 * neighbours)) odd = true;
     if (amp >= Math.max(0.045, 0.75 * neighbours)) {
@@ -21076,11 +21112,11 @@ function harmonicIntervalEvidence(peaks, lower, other, bw, strict = true, interv
     }
   }
   return (strong && (!strict || (odd && evidence >= 2))) ||
-    (strict && third && fourth);
+    (strict && fourth && (third || (interval === 12 && fifth)));
 }
 
 /* Confirme une note avec sa fondamentale et des partiels que les autres touches n'expliquent pas. */
-function quietNoteEvidence(pk, m, other, bw, weakPair = false) {
+function quietNoteEvidence(pk, m, other, bw, allowWeak = false) {
   const root = 440 * 2 ** ((m - 69) / 12);
   const bases = other.map(n => 440 * 2 ** ((n - 69) / 12));
   const peak = (h, min) => {
@@ -21092,7 +21128,7 @@ function quietNoteEvidence(pk, m, other, bw, weakPair = false) {
       }));
   };
   return peak(1, 0.036) && (peak(2, 0.12) || peak(3, 0.12) || peak(4, 0.12) ||
-    (weakPair && (
+    (allowWeak && (
       [2, 3, 4, 5, 6].filter(h => peak(h, 0.041)).length >= 2 ||
       (peak(1, 0.09) && [2, 3, 4, 5].some(h => peak(h, 0.06)))
     )));
@@ -21175,9 +21211,10 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
       const m = missing[0];
       const extra = extras[0];
       const other = out.filter(note => note !== extra).map(note => note.m);
-      const quietLower = expected.length === 2 && other.length === 1 && other[0] === m + 12;
+      const allowWeak = (expected.length === 2 && other.length === 1 && other[0] === m + 12) ||
+        (expected.length === 3 && !extra);
       if (m >= PITCH.lo && m <= PITCH.hi && (!extra || Math.abs(extra.m - m) === 12) &&
-          quietNoteEvidence(pk, m, other, sr / n, quietLower) &&
+          quietNoteEvidence(pk, m, other, sr / n, allowWeak) &&
           (!extra || extra.m < m || !harmonicIntervalEvidence(pk, m, other, sr / n, false))) {
         if (extra) extra.m = m;
         else if (out.length < max) out.push({m, s: 0});
@@ -21297,28 +21334,31 @@ function pitchTracker(sr, n) {
       let finished = null;
       if (ev && !ev.done && (hit || fastDone || now - ev.t > 260)) {
         ev.done = true;
-        // Une note confirmée peut s’éteindre avant l’autre. Garder la paire
-        // si la dernière mesure ne contient que ses notes.
-        if (ev.pair && ev.previous.every(m => ev.pair.includes(m))) ev.notes = ev.pair;
-        else if (ev.previous.length) ev.notes = ev.previous;
+        // Une note d'un accord peut s'éteindre avant les autres. Une estimation
+        // momentanée sur la fin peut aussi confondre un partiel avec une touche.
+        if (ev.chord && (ev.previous.every(m => ev.chord.includes(m)) ||
+            (ev.chord.length >= 3 && now - ev.previousAt < 24 &&
+             ev.previous.filter(m => ev.chord.includes(m)).length >= 2))) {
+          ev.notes = ev.chord;
+        } else if (ev.previous.length) ev.notes = ev.previous;
         finished = ev.notes;
       }
       if (hit) {
         const ref = new Float32Array(L);
         for (const h of old) for (let k = 0; k < L; k++) if (h.lin[k] > ref[k]) ref[k] = h.lin[k];
         ev = {t: now, fast, ref, acc: new Float32Array(L), c: 0,
-          previous: [], previousAt: now, notes: [], pair: null, weight: 0, spectrumAt: now, done: false};
+          previous: [], previousAt: now, notes: [], chord: null, weight: 0, spectrumAt: now, done: false};
         last = now;
       }
       hist.push({t: now, lin});
       while (hist.length && hist[0].t < now - 200) hist.shift();
       if (ev && !ev.done && now - ev.t >= (ev.fast ? 55 : 45)) {
         ev.c++;
-        // Pour deux touches espacées, les images récentes rendent visible
-        // une deuxième attaque légèrement retardée. Garder toute la fenêtre
-        // pour les intervalles serrés, dont les partiels se séparent moins bien.
-        const spacedPair = expected?.length === 2 && Math.abs(expected[0] - expected[1]) >= 3;
-        const decay = spacedPair ? Math.exp((ev.spectrumAt - now) / 103) : 1;
+        // Pour des touches espacées, les analyses récentes rendent plus visible
+        // une attaque légèrement retardée et réduisent le poids de l'attaque
+        // précédente. Garder toute la fenêtre pour les intervalles serrés.
+        const spacedChord = expected?.length >= 2 && expected.every((m, i) => !i || m - expected[i - 1] >= 3);
+        const decay = spacedChord ? Math.exp((ev.spectrumAt - now) / 103) : 1;
         ev.spectrumAt = now;
         ev.weight = decay * ev.weight + 1;
         for (let k = 0; k < L; k++) ev.acc[k] = decay * ev.acc[k] + Math.max(0, lin[k] - ev.ref[k]);
@@ -21340,10 +21380,9 @@ function pitchTracker(sr, n) {
           if (notes.length && same) {
             ev.notes = notes;
             // Exiger aussi un intervalle de temps entre les mesures, y compris à 120 Hz.
-            if (expected?.length === 2 && notes.length === 2 && now - ev.previousAt >= 24 &&
-                (notes[0] % 12 === expected[0] % 12 && notes[1] % 12 === expected[1] % 12 ||
-                 notes[0] % 12 === expected[1] % 12 && notes[1] % 12 === expected[0] % 12)) {
-              ev.pair = notes;
+            if (expected?.length >= 2 && notes.length === expected.length && now - ev.previousAt >= 24 &&
+                notes.map(m => m % 12).sort().join() === expected.map(m => m % 12).sort().join()) {
+              ev.chord = notes;
             }
           }
           ev.previous = notes;
