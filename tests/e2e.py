@@ -330,6 +330,52 @@ def jouer_micro(b, url):
     return pg
 
 
+def jouer_micro_relance(b, url):
+    """Un micro coupé affiche son état et un nouveau flux valide la note."""
+    pg = new_page(b)
+    pg.add_init_script("""(() => {
+        const devices = navigator.mediaDevices;
+        const capture = devices.getUserMedia.bind(devices);
+        window.testTracks = [];
+        devices.getUserMedia = async options => {
+            const stream = await capture(options);
+            window.testTracks.push(stream.getAudioTracks()[0]);
+            return stream;
+        };
+    })();""")
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    pg.wait_for_selector("#prMic.live")
+    pg.evaluate("""() => {
+        const track = window.testTracks[0];
+        Object.defineProperty(track, "muted", {value: true, configurable: true});
+        track.dispatchEvent(new Event("mute"));
+    }""")
+    assert "en pause" in pg.inner_text("#prMicT")
+    pg.evaluate("""() => {
+        const track = window.testTracks[0];
+        delete track.muted;
+        track.dispatchEvent(new Event("unmute"));
+    }""")
+    pg.wait_for_selector("#prMic.live")
+    pg.evaluate("""() => {
+        const track = window.testTracks[0];
+        track.stop();
+        track.dispatchEvent(new Event("ended"));
+    }""")
+    assert "arrêté" in pg.inner_text("#prMicT")
+    pg.click("#prSkip")
+    assert pg.inner_text("#prNeed").split() == ["E4"]
+    pg.click("#prMic")
+    pg.wait_for_selector("#prMic.live")
+    assert pg.evaluate("testTracks.map(t => t.readyState)") == ["ended", "live"]
+    pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('3 /')", timeout=6000)
+    assert pg.inner_text("#prHeardN").split() == ["E4"]
+    pg.click("#prX")
+    assert pg.evaluate("testTracks.every(t => t.readyState === 'ended')")
+    return pg
+
+
 def justesse_wav(octave=4):
     note = f"E{octave}"
     cents = 22
@@ -654,8 +700,9 @@ jouer_rapide.mic = rapide_wav
 jouer_justesse.mic = justesse_wav
 jouer_octave_libre.mic = lambda: justesse_wav(3)
 jouer_micro.mic = micro_wav
+jouer_micro_relance.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, jouer_ligne, jouer_accord_resonant, structure]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_relance, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, jouer_ligne, jouer_accord_resonant, structure]
 
 
 def main():

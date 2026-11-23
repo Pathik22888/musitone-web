@@ -5622,6 +5622,13 @@ body.practice #steps3 {
   gap: 10px;
 }
 .prMic {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  white-space: normal;
   flex: 1;
   display: flex;
   align-items: center;
@@ -20630,7 +20637,6 @@ const PR = {
   hand: "both",
   mic: null,
   an: null,
-  st: null,
   raf: 0,
   ok: 0,
   tr: null,
@@ -20692,7 +20698,7 @@ function prOpen() {
     P.setAttribute("role", "region");
     P.setAttribute("aria-labelledby", "prTitle");
     P.innerHTML = `<div class="modeHead"><b id="prTitle">Jouer</b><button type="button" id="prX" class="modeDone">Terminé</button></div>
-    <div class="prTop"><span class="prMic" id="prMic"><i></i><b id="prMicT">Micro…</b></span><span class="prPos" id="prPos"></span></div>
+    <div class="prTop"><button type="button" class="prMic" id="prMic" title="Relancer le micro"><i></i><b id="prMicT" aria-live="polite">Micro…</b></button><span class="prPos" id="prPos"></span></div>
     <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div><div class="prHeard" id="prHeard"><small>J'entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div></div>
     <div id="prTune" class="prTune">
       <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>
@@ -20704,9 +20710,7 @@ function prOpen() {
     document.body.appendChild(P);
 
     $("prX").onclick = prClose;
-    $("prMic").onclick = () => {
-      if (!PR.an) prMicStart();
-    };
+    $("prMic").onclick = prMicStart;
     $("prPrev").onclick = () => {
       PR.k = Math.max(0, PR.k - 1);
       PR.tap = null;
@@ -20738,13 +20742,7 @@ function prClose() {
   document.body.classList.remove("practice");
   const P = $("prPanel");
   if (P) P.hidden = true;
-  cancelAnimationFrame(PR.raf);
-  try {
-    PR.st && PR.st.getTracks().forEach(t => t.stop());
-  } catch (e) {}
-  PR.st = null;
-  PR.an = null;
-  PR.onset = null;
+  prMicStop();
   try {
     drawMarks();
   } catch (e) {}
@@ -20880,34 +20878,58 @@ function prFollow(pg, line, x, events) {
   }
 }
 /* micro : on écoute le piano ; la reconnaissance des notes est dans 34-pitch.js */
+function prMicStatus(text, state = "") {
+  $("prMicT").textContent = text;
+  $("prMic").className = "prMic " + state;
+}
+function prMicStop() {
+  const mic = PR.mic;
+  PR.mic = null;
+  cancelAnimationFrame(PR.raf);
+  PR.raf = 0;
+  mic?.cleanup?.();
+  mic?.stream?.getTracks().forEach(track => track.stop());
+  PR.an = null;
+  PR.onset = null;
+  PR.target = null;
+  PR.tune = null;
+}
 async function prMicStart() {
-  const set = (t, cl) => {
-    $("prMicT").textContent = t;
-    $("prMic").className = "prMic " + (cl || "");
-  };
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    set("Micro indisponible sur cet appareil", "off");
+  if (!PR.on || (PR.mic && !PR.an)) return;
+  prMicStop();
+  const panel = $("prHeard");
+  clearTimeout(PR.heardT);
+  panel.classList.remove("on");
+  $("prHeardN").innerHTML = "<em>—</em>";
+  prTuning(null);
+  if (!navigator.mediaDevices?.getUserMedia) {
+    prMicStatus("Micro indisponible sur cet appareil", "off");
     return;
   }
-  set("Autorisez le micro…");
+  const mic = {};
+  PR.mic = mic;
+  prMicStatus("Autorisez le micro…");
   try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
-    await AC.resume();
-    const st = await navigator.mediaDevices.getUserMedia({
+    if (!AC || AC.state === "closed") AC = new (window.AudioContext || window.webkitAudioContext)();
+    const context = AC;
+    // Demander le micro pendant le geste, même si la reprise audio reste en attente.
+    context.resume().catch(() => {});
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}
     });
-    if (!PR.on) {
-      st.getTracks().forEach(t => t.stop());
+    if (PR.mic !== mic) {
+      stream.getTracks().forEach(track => track.stop());
       return;
     }
-    PR.st = st;
-    const src = AC.createMediaStreamSource(st),
-      an = AC.createAnalyser();
+    mic.stream = stream;
+    const [track] = stream.getAudioTracks();
+    if (!track || track.readyState === "ended") throw new Error("Micro arrêté");
+    const src = context.createMediaStreamSource(stream),
+      an = context.createAnalyser(),
+      onset = context.createAnalyser();
     an.fftSize = 8192;
-    an.smoothingTimeConstant = 0;
-    const onset = AC.createAnalyser();
     onset.fftSize = 2048;
-    onset.smoothingTimeConstant = 0;
+    an.smoothingTimeConstant = onset.smoothingTimeConstant = 0;
     src.connect(an);
     src.connect(onset);
     PR.onset = onset;
@@ -20915,15 +20937,54 @@ async function prMicStart() {
     PR.an = an;
     PR.fb = new Float32Array(an.frequencyBinCount);
     PR.tb = new Float32Array(an.fftSize);
-    PR.tr = pitchTracker(AC.sampleRate, an.fftSize);
-    PR.target = null;
-    PR.tune = null;
-    prTuning(null);
-    set("J'écoute votre piano", "live");
-    prLoop();
+
+    const ended = () => {
+      if (PR.mic !== mic) return;
+      prMicStop();
+      prMicStatus("Micro arrêté · touchez pour relancer", "off");
+    };
+    const sync = () => {
+      if (PR.mic !== mic) return;
+      if (context.state === "closed" || track.readyState === "ended") {
+        ended();
+      } else if (document.hidden || context.state !== "running" || track.muted) {
+        cancelAnimationFrame(PR.raf);
+        PR.raf = 0;
+        PR.target = null;
+        PR.tune = null;
+        prTuning(null);
+        prMicStatus("Micro en pause · touchez pour relancer", "off");
+      } else if (!PR.raf) {
+        mic.silentSince = null;
+        mic.silent = false;
+        PR.tr = pitchTracker(context.sampleRate, an.fftSize);
+        prMicStatus("J'écoute votre piano", "live");
+        prLoop();
+      }
+    };
+    const visible = () => {
+      sync();
+      if (PR.mic === mic && !document.hidden && context.state !== "running") context.resume().catch(() => {});
+    };
+    document.addEventListener("visibilitychange", visible);
+    context.addEventListener("statechange", sync);
+    track.addEventListener("mute", sync);
+    track.addEventListener("unmute", sync);
+    track.addEventListener("ended", ended);
+    mic.cleanup = () => {
+      document.removeEventListener("visibilitychange", visible);
+      context.removeEventListener("statechange", sync);
+      track.removeEventListener("mute", sync);
+      track.removeEventListener("unmute", sync);
+      track.removeEventListener("ended", ended);
+      src.disconnect();
+    };
+    visible();
   } catch (e) {
-    set(
-      e && e.name === "NotAllowedError"
+    if (PR.mic !== mic) return;
+    prMicStop();
+    prMicStatus(
+      e?.name === "NotAllowedError"
         ? "Micro refusé · touchez ici pour réessayer"
         : "Micro indisponible · touchez ici pour réessayer",
       "off"
@@ -20941,6 +21002,20 @@ function prLoop() {
   an.getFloatFrequencyData(PR.fb);
   PR.onset.getFloatFrequencyData(PR.onsetBins);
   const now = performance.now();
+  const mic = PR.mic;
+  if (rms === 0) {
+    mic.silentSince ??= now;
+    if (!mic.silent && now - mic.silentSince >= 3000) {
+      mic.silent = true;
+      prMicStatus("Aucun signal · touchez pour relancer", "off");
+    }
+  } else {
+    mic.silentSince = null;
+    if (mic.silent) {
+      mic.silent = false;
+      prMicStatus("J'écoute votre piano", "live");
+    }
+  }
   const expected = PR.G[PR.k]?.ms;
   const r = PR.tr.feed(PR.fb, rms, now, expected, PR.onsetBins);
   if (r.finished?.length && PR.target === PR.G[PR.k]) {

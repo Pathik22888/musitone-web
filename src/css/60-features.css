@@ -793,6 +793,13 @@ body.practice #steps3 {
   gap: 10px;
 }
 .prMic {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  white-space: normal;
   flex: 1;
   display: flex;
   align-items: center;
