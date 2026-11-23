@@ -14,6 +14,7 @@ const PR = {
 };
 const PCN = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"],
   PCL = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+const prPitchClasses = notes => notes.map(m => m % 12).sort((a, b) => a - b);
 function prGroups() {
   const S = songNow();
   if (!S) return [];
@@ -27,12 +28,10 @@ function prGroups() {
   }
   return [...by.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([k, evs]) => ({
-      t: k / 1000,
-      evs,
-      pcs: [...new Set(evs.map(e => ((e.m % 12) + 12) % 12))],
-      ms: [...new Set(evs.map(e => e.m))].sort((a, b) => a - b)
-    }));
+    .map(([k, evs]) => {
+      const ms = [...new Set(evs.map(e => e.m))].sort((a, b) => a - b);
+      return {t: k / 1000, evs, ms, pcs: prPitchClasses(ms)};
+    });
 }
 const prName = m => PCN[((m % 12) + 12) % 12] + `<sub>${Math.floor(m / 12) - 1}</sub>`;
 function prColor(pc) {
@@ -287,7 +286,7 @@ function prLoop() {
   const r = PR.tr.feed(PR.fb, rms, now, expected, PR.onsetBins);
   if (r.finished?.length && PR.target === PR.G[PR.k]) {
     const heard = r.finished[0];
-    PR.tune = {heard, reference: expected?.length === 1 ? expected[0] : heard, until: now + 2500};
+    PR.tune = {heard, until: now + 2500};
     prTuning(null);
     prHeard(r.finished);
     if (prJudge(r.finished)) prNext(true);
@@ -299,22 +298,19 @@ function prLoop() {
     PR.tune = null;
     prTuning(null);
   } else if (tune && rms > r.gate) {
-    const cents = pitchOffset(PR.fb, AC.sampleRate, an.fftSize, tune.heard, tune.reference);
+    const cents = pitchOffset(PR.fb, AC.sampleRate, an.fftSize, tune.heard, tune.heard);
     if (cents !== null) prTuning(cents, tune.heard);
   }
 }
-/* affiche ce que le micro capte : les notes exactes (avec l'octave), dans leur couleur.
-   Pleine = bonne note ; contour pointillé = bonne couleur mais pas la bonne octave ; contour = autre note */
+/* Affiche la note entendue et son octave. La couleur confirme le nom de la note. */
 function prHeard(notes) {
   const box = $("prHeardN");
   if (!box) return;
-  const g = PR.G[PR.k],
-    ms = g ? g.ms : [],
-    pcs = g ? g.pcs : [];
+  const pcs = PR.G[PR.k]?.pcs ?? [];
   box.innerHTML = notes
     .map(m => {
       const pc = ((m % 12) + 12) % 12,
-        cl = ms.includes(m) ? "ok" : pcs.includes(pc) ? "oct" : "no";
+        cl = pcs.includes(pc) ? "ok" : "no";
       return `<span class="${cl}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
     })
     .join("");
@@ -341,10 +337,10 @@ function prTuning(cents, heard) {
   marker.classList.toggle("centered", Math.abs(rounded) <= 5);
   marker.hidden = false;
 }
-/* Toutes les notes de l'accord doivent être présentes, à la bonne octave. */
+/* Compare les noms de notes, en comptant les doublures d'un accord. */
 function prJudge(notes) {
-  const g = PR.G[PR.k];
-  return !!g && g.ms.length === notes.length && notes.every(m => g.ms.includes(m));
+  const expected = PR.G[PR.k]?.pcs;
+  return expected?.length === notes.length && prPitchClasses(notes).every((pc, i) => pc === expected[i]);
 }
 
 $("dPrac").onclick = () => (PR.on ? prClose() : prOpen());

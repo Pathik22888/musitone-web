@@ -1011,9 +1011,6 @@ body.keymode .kmBar .kmBtns {
   vertical-align: baseline;
   opacity: 0.8;
 }
-.prHeardN span.oct {
-  border-style: dashed;
-}
 .prNeed span sub {
   font-size: 12px;
   margin-left: 1px;

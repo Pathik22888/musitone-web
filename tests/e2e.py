@@ -288,17 +288,17 @@ def jouer_micro(b, url):
     return pg
 
 
-def justesse_wav():
+def justesse_wav(octave=4):
+    note = f"E{octave}"
     cents = 22
     return chords_wav(
-        "musitone_justesse.wav",
-        {"E4": ("Ds4", 1 + cents / 100, 0.4)},
-        [(2000, ["E4"])],
+        f"musitone_justesse_{octave}.wav",
+        {note: (f"Ds{octave}", 1 + cents / 100, 0.4)},
+        [(2000, [note])],
     )
 
 
-def jouer_justesse(b, url):
-    """Un E4 aigu affiche une valeur positive et un repère à droite."""
+def verifier_justesse(b, url, note):
     pg = new_page(b)
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
@@ -306,10 +306,21 @@ def jouer_justesse(b, url):
     assert pg.inner_text("#prNeed").split() == ["E4"]
     pg.wait_for_function("document.querySelector('#prTuneValue').textContent.includes('Trop aigu')", timeout=6000)
     text = pg.inner_text("#prTuneValue")
-    assert text.startswith("E4") and "(+" in text, text
-    assert float(pg.locator("#prTuneMark").evaluate("marker => parseFloat(marker.style.left)")) > 50
+    assert text.startswith(note) and "(+" in text, text
+    assert 50 < float(pg.locator("#prTuneMark").evaluate("marker => parseFloat(marker.style.left)")) < 90
+    assert pg.locator("#prHeardN span.ok").inner_text() == note
     assert pg.inner_text("#prPos").startswith("3 /")
     return pg
+
+
+def jouer_justesse(b, url):
+    """Un E4 aigu affiche une valeur positive et un repère à droite."""
+    return verifier_justesse(b, url, "E4")
+
+
+def jouer_octave_libre(b, url):
+    """Le Mi3 valide un Mi4 demandé et la jauge évalue la justesse du Mi3."""
+    return verifier_justesse(b, url, "E3")
 
 
 def rapide_wav():
@@ -331,8 +342,8 @@ def jouer_rapide(b, url):
         start = html.index("function prGroups()")
         end = html.index("const prName", start)
         body = html[start:end]
-        body = body.replace(".map(([k, evs]) => ({", ".map(([k, evs], i) => ({")
-        body = body.replace("ms: [...new Set", "ms: i < 5 ? [[60, 63, 66, 69, 72][i]] : [...new Set")
+        body = body.replace(".map(([k, evs]) => {", ".map(([k, evs], i) => {")
+        body = body.replace("const ms = [...new Set", "const ms = i < 5 ? [[60, 63, 66, 69, 72][i]] : [...new Set")
         route.fulfill(response=response, body=html[:start] + body + html[end:])
 
     pg.route("**/test.html", excerpt)
@@ -408,42 +419,35 @@ def deux_mains_wav():
         "musitone_deux_mains.wav",
         {"D3": ("C3", 2, 0.4), "G3": ("Fs3", 1, 0.18), "B3": ("A3", 2, 0.32),
          "F4": ("Ds4", 2, 0.32), "G4": ("Fs4", 1, 0.32)},
-        [(2000, ["D3", "B3", "F4"]), (4200, ["D3", "G4", "B3", "F4"]), (6500, ["D3", "G3", "B3", "F4"])],
+        [(2000, ["D3", "B3", "F4"]), (4200, ["D3", "G4", "B3", "F4"])],
     )
 
 
 def jouer_deux_mains(b, url):
-    """La basse doit être présente à la bonne octave pour valider un accord à deux mains."""
+    """L'accord incomplet est refusé et un Sol à une autre octave valide l'accord complet."""
     pg = new_page(b)
     open_score(pg, url, "low.png")
     assert pg.evaluate("new Set(__mt.sn().ev.filter(e => e.t === 0).map(e => !!e.hand)).size") == 2
     pg.click("#dPrac")
     assert pg.inner_text("#prNeed").split() == ["D3", "G3", "B3", "F4"]
-    for notes in [["B3", "D3", "F4"], ["B3", "D3", "F4", "G4"]]:
-        pg.wait_for_function(
-            """expected => {
-                const notes = Array.from(document.querySelectorAll('#prHeardN span'), n => n.textContent).sort();
-                return JSON.stringify(notes) === JSON.stringify(expected);
-            }""",
-            arg=notes,
-            timeout=9000,
-        )
-        assert pg.inner_text("#prPos").startswith("1 /")
+    pg.wait_for_function("document.querySelectorAll('#prHeardN span').length === 3", timeout=9000)
+    assert sorted(pg.locator("#prHeardN span").all_text_contents()) == ["B3", "D3", "F4"]
+    assert pg.inner_text("#prPos").startswith("1 /")
     pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=9000)
-    assert sorted(pg.locator("#prHeardN span").all_text_contents()) == ["B3", "D3", "F4", "G3"]
+    assert sorted(pg.locator("#prHeardN span.ok").all_text_contents()) == ["B3", "D3", "F4", "G4"]
     return pg
 
 
 def octave_mains_wav():
     return chords_wav(
         "musitone_octave_mains.wav",
-        {"C3": ("C3", 0, 0.4), "E3": ("Ds3", 1, 0.32), "C4": ("C4", 0, 0.32), "C5": ("C5", 0, 0.32)},
-        [(2000, ["C3", "E3"]), (4200, ["C3", "E3", "C5"]), (6500, ["C3", "E3", "C4"])],
+        {"C3": ("C3", 0, 0.4), "E3": ("Ds3", 1, 0.32), "C4": ("C4", 0, 0.32)},
+        [(2000, ["C3", "E3"]), (6500, ["C3", "E3", "C4"])],
     )
 
 
 def jouer_octave_mains(b, url):
-    """C3–E3 et C3–E3–C5 sont refusés, C3–E3–C4 fait avancer."""
+    """Un seul Do ne suffit pas quand deux Do sont écrits dans le même accord."""
     pg = new_page(b)
 
     def excerpt(route):
@@ -459,7 +463,7 @@ def jouer_octave_mains(b, url):
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
     assert pg.inner_text("#prNeed").split() == ["C3", "E3", "C4"]
-    pg.wait_for_timeout(5400)  # Deux premiers essais terminés, avant le C4 à 6,5 s.
+    pg.wait_for_timeout(5400)  # Accord incomplet passé, avant le C4 à 6,5 s.
     assert pg.inner_text("#prPos").startswith("1 /")
     pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=6500)
     assert sorted(pg.locator("#prHeardN span").all_text_contents()) == ["C3", "C4", "E3"]
@@ -469,8 +473,8 @@ def jouer_octave_mains(b, url):
 def allegretto_wav():
     return chords_wav(
         "musitone_allegretto.wav",
-        {"G3": ("Fs3", 1, 0.5), "B4": ("A4", 2, 0.4), "G4": ("Fs4", 1, 0.325), "G5": ("Fs5", 1, 0.325)},
-        [(2000, ["G3", "B4"]), (4200, ["G3", "B4"]), (4220, ["G5"]),
+        {"G3": ("Fs3", 1, 0.5), "B4": ("A4", 2, 0.4), "G4": ("Fs4", 1, 0.325)},
+        [(2000, ["G3", "B4"]),
          (6500, ["G3", "B4"]), (6520, ["G4"])],
     )
 
@@ -530,9 +534,10 @@ jouer_octave_mains.mic = octave_mains_wav
 
 jouer_rapide.mic = rapide_wav
 jouer_justesse.mic = justesse_wav
+jouer_octave_libre.mic = lambda: justesse_wav(3)
 jouer_micro.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, structure]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, structure]
 
 
 def main():
