@@ -71,21 +71,25 @@ function prOpen() {
     <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div></div>
     <div class="prTools">
       <label><select id="prHands" aria-label="Main à travailler"><option value="both">Les deux mains</option><option value="r">Main droite</option><option value="l">Main gauche</option></select></label>
-      <details id="prDetails"><summary id="prDetailsLabel">Détails du micro</summary>
-        <div class="prDiagnostics"><div class="prHeard" id="prHeard"><small>J’entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div>
-    <div id="prTune" class="prTune">
-      <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>
-      <div class="prTuneScale" aria-hidden="true"><i></i><b id="prTuneMark" hidden></b></div>
-      <div class="prTuneLabels" aria-hidden="true"><span>Grave</span><span>Juste</span><span>Aigu</span></div>
+      <button type="button" id="prDetailsLabel" aria-expanded="false" aria-controls="prDetails">Détails du micro</button>
     </div>
-        </div>
-      </details>
+    <div id="prDetails" class="prDiagnostics" hidden>
+      <div class="prHeard" id="prHeard"><small>J’entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div>
+      <div id="prTune" class="prTune">
+        <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>
+        <div class="prTuneScale" aria-hidden="true"><i></i><b id="prTuneMark" hidden></b></div>
+        <div class="prTuneLabels" aria-hidden="true"><span>Grave</span><span>Juste</span><span>Aigu</span></div>
+      </div>
     </div>
     <div class="prNav"><button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button><button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button></div>`;
-    document.body.appendChild(P);
+    $("work").appendChild(P);
 
     $("prX").onclick = prClose;
     $("prMic").onclick = prMicStart;
+    $("prDetailsLabel").onclick = () => {
+      prDetailsOpen($("prDetails").hidden);
+      prShow(false);
+    };
     $("prPrev").onclick = () => {
       PR.k = Math.max(0, PR.k - 1);
       PR.tap = null;
@@ -106,7 +110,7 @@ function prOpen() {
   }
   P.hidden = false;
   $("prHands").value = PR.hand;
-  $("prDetails").open = false;
+  prDetailsOpen(false);
   prShow();
   prMicStart();
 }
@@ -168,17 +172,23 @@ async function prNext(good) {
   }
   prShow();
 }
-function prShow() {
+function prDetailsOpen(open) {
+  $("prDetails").hidden = !open;
+  $("prDetailsLabel").setAttribute("aria-expanded", open);
+}
+function prShow(refreshNotes = true) {
   const g = PR.G[PR.k];
   if (!g) return;
-  $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
-  $("prDetailsLabel").textContent = "Détails du micro";
-  $("prNeed").innerHTML = g.ms
-    .map(m => {
-      const pc = ((m % 12) + 12) % 12;
-      return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
-    })
-    .join("");
+  if (refreshNotes) {
+    $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
+    $("prDetailsLabel").textContent = "Détails du micro";
+    $("prNeed").innerHTML = g.ms
+      .map(m => {
+        const pc = ((m % 12) + 12) % 12;
+        return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
+      })
+      .join("");
+  }
   try {
     drawMarks();
     const c = $("ov").getContext("2d"),
@@ -215,8 +225,7 @@ function prFollow(pg, line, x, events) {
   const v = $("view"),
     vr = v.getBoundingClientRect(),
     r = $("cv").getBoundingClientRect(),
-    panelTop = $("prPanel").getBoundingClientRect().top,
-    height = Math.min(vr.bottom, panelTop) - vr.top;
+    height = vr.height;
   if (height <= 0) return;
 
   const now = performance.now();

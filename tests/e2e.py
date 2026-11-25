@@ -230,6 +230,30 @@ def jouer_interface(b, url):
     return pg
 
 
+def jouer_details_partition(b, url):
+    """Les détails sont dans le bandeau et la partition garde une zone sans superposition."""
+    pg = new_page(b)
+    pg.set_viewport_size({"width": 360, "height": 640})
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    view = pg.locator("#view")
+    panel = pg.locator("#prPanel")
+    before = view.bounding_box()
+    pg.click("#prDetailsLabel")
+    assert pg.get_attribute("#prDetailsLabel", "aria-expanded") == "true"
+    score = view.bounding_box()
+    controls = panel.bounding_box()
+    details = pg.locator("#prDetails").bounding_box()
+    assert 150 < score["height"] < before["height"]
+    assert score["y"] + score["height"] <= controls["y"]
+    assert controls["y"] <= details["y"] < details["y"] + details["height"] <= controls["y"] + controls["height"]
+    assert pg.is_visible("#prHeard") and pg.is_visible("#prTune")
+    pg.click("#prDetailsLabel")
+    assert not pg.is_visible("#prDetails")
+    assert view.bounding_box()["height"] == before["height"]
+    return pg
+
+
 def jouer_ligne(b, url):
     """En zoom, Jouer revient à gauche et descend jusqu'à la ligne suivante."""
     pg = new_page(b)
@@ -737,7 +761,7 @@ jouer_octave_libre.mic = lambda: justesse_wav(3)
 jouer_micro.mic = micro_wav
 jouer_micro_relance.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_relance, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, jouer_interface, jouer_ligne, jouer_accord_resonant, structure]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_relance, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, jouer_interface, jouer_details_partition, jouer_ligne, jouer_accord_resonant, structure]
 
 
 def main():

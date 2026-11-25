@@ -767,21 +767,23 @@ body.editing:not(.keymode) #steps3 {
   font-size: 16px;
 }
 .prPanel {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 55;
-  padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 64%;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding: 10px 12px max(10px, env(safe-area-inset-bottom));
   background: #0f1330;
   color: #fff;
-  border-radius: 24px 24px 0 0;
-  box-shadow: 0 -14px 40px rgba(0, 0, 0, 0.45);
+  border-radius: 18px;
   display: grid;
   gap: 10px;
 }
 .prPanel[hidden] {
   display: none;
+}
+body.working.practice .view {
+  min-height: 0;
 }
 body.practice .dock,
 body.practice #steps3 {
@@ -1095,7 +1097,7 @@ body.keymode .kmBar .kmBtns {
   gap: 8px;
 }
 .prTools select,
-.prTools summary {
+.prTools button {
   min-height: 36px;
   display: flex;
   align-items: center;
@@ -1106,28 +1108,22 @@ body.keymode .kmBar .kmBtns {
   color: #e2e7fa;
   font: 700 12px Figtree, system-ui, sans-serif;
 }
-.prTools summary {
-  cursor: pointer;
+.prTools button::after {
+  content: "⌄" / "";
 }
-.prTools summary::after {
-  content: "⌄";
-  margin-left: 8px;
-}
-.prTools details[open] summary::after {
-  content: "⌃";
+.prTools button[aria-expanded="true"]::after {
+  content: "⌃" / "";
 }
 .prDiagnostics {
-  position: absolute;
-  max-width: calc(100% - 28px);
-  bottom: calc(100% + 8px);
-  left: 14px;
   display: grid;
-  gap: 9px;
-  padding: 10px 12px;
-  min-width: min(280px, calc(100vw - 28px));
-  background: #171e39;
-  border: 1px solid #465271;
-  border-radius: 12px;
+  grid-template-columns: minmax(65px, 1fr) minmax(125px, 1.4fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-block: 1px solid #303858;
+}
+.prDiagnostics[hidden] {
+  display: none;
 }
 .prDiagnostics .prHeard {
   margin-left: 0;
