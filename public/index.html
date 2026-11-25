@@ -5925,8 +5925,7 @@ body.keymode .kmBar .kmBtns {
   align-items: center;
   gap: 8px;
 }
-.prTools select,
-.prTools button {
+.prTools select {
   min-height: 36px;
   display: flex;
   align-items: center;
@@ -5937,11 +5936,9 @@ body.keymode .kmBar .kmBtns {
   color: #e2e7fa;
   font: 700 12px Figtree, system-ui, sans-serif;
 }
-.prTools button::after {
-  content: "⌄" / "";
-}
-.prTools button[aria-expanded="true"]::after {
-  content: "⌃" / "";
+.prTools small {
+  color: #c9cfe8;
+  font-size: 12px;
 }
 .prDiagnostics {
   display: grid;
@@ -5951,15 +5948,18 @@ body.keymode .kmBar .kmBtns {
   padding: 8px 0;
   border-block: 1px solid #303858;
 }
-.prDiagnostics[hidden] {
-  display: none;
-}
 .prDiagnostics .prHeard {
   margin-left: 0;
   justify-items: start;
+  min-width: 0;
 }
 .prDiagnostics .prHeardN {
   flex-wrap: wrap;
+}
+.prDiagnostics .prHeardN span {
+  min-width: 34px;
+  padding: 4px 5px;
+  font-size: 16px;
 }
 .prNeed span.matched {
   box-shadow: inset 0 0 0 2px #243051;
@@ -20751,9 +20751,9 @@ function prOpen() {
     <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div></div>
     <div class="prTools">
       <label><select id="prHands" aria-label="Main à travailler"><option value="both">Les deux mains</option><option value="r">Main droite</option><option value="l">Main gauche</option></select></label>
-      <button type="button" id="prDetailsLabel" aria-expanded="false" aria-controls="prDetails">Détails du micro</button>
+      <small id="prExtra"></small>
     </div>
-    <div id="prDetails" class="prDiagnostics" hidden>
+    <div id="prDetails" class="prDiagnostics">
       <div class="prHeard" id="prHeard"><small>J’entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div>
       <div id="prTune" class="prTune">
         <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>
@@ -20766,10 +20766,6 @@ function prOpen() {
 
     $("prX").onclick = prClose;
     $("prMic").onclick = prMicStart;
-    $("prDetailsLabel").onclick = () => {
-      prDetailsOpen($("prDetails").hidden);
-      prShow(false);
-    };
     $("prPrev").onclick = () => {
       PR.k = Math.max(0, PR.k - 1);
       PR.tap = null;
@@ -20790,7 +20786,6 @@ function prOpen() {
   }
   P.hidden = false;
   $("prHands").value = PR.hand;
-  prDetailsOpen(false);
   prShow();
   prMicStart();
 }
@@ -20852,23 +20847,17 @@ async function prNext(good) {
   }
   prShow();
 }
-function prDetailsOpen(open) {
-  $("prDetails").hidden = !open;
-  $("prDetailsLabel").setAttribute("aria-expanded", open);
-}
-function prShow(refreshNotes = true) {
+function prShow() {
   const g = PR.G[PR.k];
   if (!g) return;
-  if (refreshNotes) {
-    $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
-    $("prDetailsLabel").textContent = "Détails du micro";
-    $("prNeed").innerHTML = g.ms
-      .map(m => {
-        const pc = ((m % 12) + 12) % 12;
-        return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
-      })
-      .join("");
-  }
+  $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
+  $("prExtra").textContent = "";
+  $("prNeed").innerHTML = g.ms
+    .map(m => {
+      const pc = ((m % 12) + 12) % 12;
+      return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
+    })
+    .join("");
   try {
     drawMarks();
     const c = $("ov").getContext("2d"),
@@ -21021,6 +21010,7 @@ async function prMicStart() {
       } else if (!PR.raf) {
         mic.silentSince = null;
         mic.silent = false;
+        mic.accepted = false;
         PR.tr = pitchTracker(context.sampleRate, an.fftSize);
         prMicStatus("J'écoute votre piano", "live");
         prLoop();
@@ -21081,13 +21071,14 @@ function prLoop() {
     }
   }
   const expected = PR.G[PR.k]?.ms;
-  const r = PR.tr.feed(PR.fb, rms, now, expected, PR.onsetBins);
+  const r = PR.tr.feed(PR.fb, rms, now, expected, PR.onsetBins, mic.accepted);
   if (r.finished?.length && PR.target === PR.G[PR.k]) {
     const heard = r.finished[0];
     PR.tune = {heard, until: now + 2500};
     prTuning(null);
     prHeard(r.finished);
-    if (prJudge(r.finished)) prNext(true);
+    mic.accepted = prJudge(r.finished);
+    if (mic.accepted) prNext(true);
     else prWrong();
   }
   if (r.hit) PR.target = PR.G[PR.k];
@@ -21119,7 +21110,7 @@ function prMarkHeard(notes) {
     chip.setAttribute("aria-label", chip.textContent + (matched.has(chip) ? " reconnue" : " à jouer"));
   }
   const extra = remaining.length;
-  $("prDetailsLabel").textContent = extra ? (extra === 1 ? "1 note en trop" : extra + " notes en trop") : "Détails du micro";
+  $("prExtra").textContent = extra ? (extra === 1 ? "1 note en trop" : extra + " notes en trop") : "";
 }
 
 function prHeard(notes) {
@@ -21464,12 +21455,13 @@ function pitchTracker(sr, n) {
     i1 = Math.min(n / 2 - 2, Math.ceil(PITCH.fmax / bw)),
     L = i1 - i0,
     hist = [],
+    ref = new Float32Array(L),
     out = new Float32Array(n / 2).fill(-200);
   let floor = null,
     last = -1e9,
     ev = null;
   return {
-    feed(db, rms, now, expected, short) {
+    feed(db, rms, now, expected, short, continuing = false) {
       const lin = new Float32Array(L);
       let tot = 1e-12;
       for (let k = 0; k < L; k++) tot += lin[k] = Math.pow(10, db[i0 + k] / 20);
@@ -21477,19 +21469,35 @@ function pitchTracker(sr, n) {
       const gate = Math.max(0.004, floor * 3),
         old = hist.filter(h => h.t <= now - 30 && h.t >= now - 150);
       let flux = 0;
+      let peak = 0;
       if (old.length) {
         for (let k = 0; k < L; k++) {
           let r = 1e-12;
           for (const h of old) if (h.lin[k] > r) r = h.lin[k];
+          ref[k] = r;
+          peak = Math.max(peak, lin[k]);
           const d = 20 * Math.log10(lin[k] / r) - 3;
           if (d > 0) flux += lin[k] * d;
         }
         flux /= tot;
-      }
+      } else ref.fill(0);
       // Les notes sous E2 ont besoin d'une fenêtre plus longue.
       const fast = expected?.length === 1 && expected[0] >= 40 && !!short;
       const quickHit = short && fastAttack(short, now, fast && rms > gate);
-      const hit = (quickHit && now - last > 90) || (rms > gate && flux > PITCH.flux && now - last > 220);
+      // Une touche douce peut apparaître pendant qu'une autre domine encore le spectre.
+      // Chercher une hausse locale avant d'analyser le résidu comme toute autre attaque.
+      const localHit = continuing && ev?.done && now - last > 130 && old.length > 0 && rms > gate &&
+        expected?.some(m => {
+          const center = Math.round((440 * 2 ** ((m - 69) / 12)) / bw) - i0;
+          const lo = Math.max(0, center - 1), hi = Math.min(L - 1, center + 1);
+          let current = 0, background = 0;
+          for (let k = lo; k <= hi; k++) {
+            current = Math.max(current, lin[k]);
+            background = Math.max(background, ref[k]);
+          }
+          return current > Math.max(0.00025, peak * 0.045, background * 2.8);
+        });
+      const hit = localHit || (quickHit && now - last > 90) || (rms > gate && flux > PITCH.flux && now - last > 220);
       const fastDone = ev?.fast && ev.notes.length === 1 && ev.notes[0] === expected?.[0] &&
         ev.previous.length === 1 && ev.previous[0] === ev.notes[0] && now - ev.t >= 95;
       let finished = null;
@@ -21505,9 +21513,7 @@ function pitchTracker(sr, n) {
         finished = ev.notes;
       }
       if (hit) {
-        const ref = new Float32Array(L);
-        for (const h of old) for (let k = 0; k < L; k++) if (h.lin[k] > ref[k]) ref[k] = h.lin[k];
-        ev = {t: now, fast, ref, acc: new Float32Array(L), c: 0,
+        ev = {t: now, fast, ref: ref.slice(), acc: new Float32Array(L), c: 0,
           previous: [], previousAt: now, notes: [], chord: null, weight: 0, spectrumAt: now, done: false};
         last = now;
       }

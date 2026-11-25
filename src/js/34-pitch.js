@@ -298,12 +298,13 @@ function pitchTracker(sr, n) {
     i1 = Math.min(n / 2 - 2, Math.ceil(PITCH.fmax / bw)),
     L = i1 - i0,
     hist = [],
+    ref = new Float32Array(L),
     out = new Float32Array(n / 2).fill(-200);
   let floor = null,
     last = -1e9,
     ev = null;
   return {
-    feed(db, rms, now, expected, short) {
+    feed(db, rms, now, expected, short, continuing = false) {
       const lin = new Float32Array(L);
       let tot = 1e-12;
       for (let k = 0; k < L; k++) tot += lin[k] = Math.pow(10, db[i0 + k] / 20);
@@ -311,19 +312,35 @@ function pitchTracker(sr, n) {
       const gate = Math.max(0.004, floor * 3),
         old = hist.filter(h => h.t <= now - 30 && h.t >= now - 150);
       let flux = 0;
+      let peak = 0;
       if (old.length) {
         for (let k = 0; k < L; k++) {
           let r = 1e-12;
           for (const h of old) if (h.lin[k] > r) r = h.lin[k];
+          ref[k] = r;
+          peak = Math.max(peak, lin[k]);
           const d = 20 * Math.log10(lin[k] / r) - 3;
           if (d > 0) flux += lin[k] * d;
         }
         flux /= tot;
-      }
+      } else ref.fill(0);
       // Les notes sous E2 ont besoin d'une fenêtre plus longue.
       const fast = expected?.length === 1 && expected[0] >= 40 && !!short;
       const quickHit = short && fastAttack(short, now, fast && rms > gate);
-      const hit = (quickHit && now - last > 90) || (rms > gate && flux > PITCH.flux && now - last > 220);
+      // Une touche douce peut apparaître pendant qu'une autre domine encore le spectre.
+      // Chercher une hausse locale avant d'analyser le résidu comme toute autre attaque.
+      const localHit = continuing && ev?.done && now - last > 130 && old.length > 0 && rms > gate &&
+        expected?.some(m => {
+          const center = Math.round((440 * 2 ** ((m - 69) / 12)) / bw) - i0;
+          const lo = Math.max(0, center - 1), hi = Math.min(L - 1, center + 1);
+          let current = 0, background = 0;
+          for (let k = lo; k <= hi; k++) {
+            current = Math.max(current, lin[k]);
+            background = Math.max(background, ref[k]);
+          }
+          return current > Math.max(0.00025, peak * 0.045, background * 2.8);
+        });
+      const hit = localHit || (quickHit && now - last > 90) || (rms > gate && flux > PITCH.flux && now - last > 220);
       const fastDone = ev?.fast && ev.notes.length === 1 && ev.notes[0] === expected?.[0] &&
         ev.previous.length === 1 && ev.previous[0] === ev.notes[0] && now - ev.t >= 95;
       let finished = null;
@@ -339,9 +356,7 @@ function pitchTracker(sr, n) {
         finished = ev.notes;
       }
       if (hit) {
-        const ref = new Float32Array(L);
-        for (const h of old) for (let k = 0; k < L; k++) if (h.lin[k] > ref[k]) ref[k] = h.lin[k];
-        ev = {t: now, fast, ref, acc: new Float32Array(L), c: 0,
+        ev = {t: now, fast, ref: ref.slice(), acc: new Float32Array(L), c: 0,
           previous: [], previousAt: now, notes: [], chord: null, weight: 0, spectrumAt: now, done: false};
         last = now;
       }

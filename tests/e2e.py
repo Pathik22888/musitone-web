@@ -222,11 +222,7 @@ def jouer_interface(b, url):
     assert pg.inner_text("#prNeed").split() == ["C4"]
     pg.select_option("#prHands", "both")
     assert pg.inner_text("#prNeed").split() == ["C3", "E3", "G3", "C4"]
-    assert not pg.is_visible("#prTune")
-    pg.click("#prDetailsLabel")
-    assert pg.is_visible("#prTune")
-    pg.click("#prDetailsLabel")
-    assert pg.locator("#prPanel").bounding_box()["height"] < 260
+    assert pg.is_visible("#prHeardN") and pg.is_visible("#prTune")
     return pg
 
 
@@ -238,19 +234,15 @@ def jouer_details_partition(b, url):
     pg.click("#dPrac")
     view = pg.locator("#view")
     panel = pg.locator("#prPanel")
-    before = view.bounding_box()
-    pg.click("#prDetailsLabel")
-    assert pg.get_attribute("#prDetailsLabel", "aria-expanded") == "true"
     score = view.bounding_box()
     controls = panel.bounding_box()
     details = pg.locator("#prDetails").bounding_box()
-    assert 150 < score["height"] < before["height"]
+    assert score["height"] > 150
     assert score["y"] + score["height"] <= controls["y"]
     assert controls["y"] <= details["y"] < details["y"] + details["height"] <= controls["y"] + controls["height"]
-    assert pg.is_visible("#prHeard") and pg.is_visible("#prTune")
-    pg.click("#prDetailsLabel")
-    assert not pg.is_visible("#prDetails")
-    assert view.bounding_box()["height"] == before["height"]
+    assert pg.is_visible("#prHeardN") and pg.is_visible("#prTune")
+    assert pg.locator("#prDetailsLabel").count() == 0
+    assert pg.locator("#prSkip").bounding_box()["y"] < controls["y"] + controls["height"]
     return pg
 
 
@@ -446,7 +438,6 @@ def verifier_justesse(b, url, note):
     pg.click("#dPrac")
     pg.click("#prSkip")
     assert pg.inner_text("#prNeed").split() == ["E4"]
-    pg.click("#prDetailsLabel")
     pg.wait_for_function("document.querySelector('#prTuneValue').textContent.includes('Trop aigu')", timeout=6000)
     text = pg.inner_text("#prTuneValue")
     assert text.startswith(note) and "(+" in text, text
@@ -475,10 +466,7 @@ def rapide_wav():
     )
 
 
-def jouer_rapide(b, url):
-    """Cinq notes espacées de 180 ms avancent de cinq positions."""
-    pg = new_page(b)
-
+def practice_excerpt(pg, notes):
     def excerpt(route):
         response = route.fetch()
         html = response.text()
@@ -486,15 +474,42 @@ def jouer_rapide(b, url):
         end = html.index("const prName", start)
         body = html[start:end]
         body = body.replace(".map(([k, evs]) => {", ".map(([k, evs], i) => {")
-        body = body.replace("const ms = [...new Set", "const ms = i < 5 ? [[60, 63, 66, 69, 72][i]] : [...new Set")
+        body = body.replace("const ms = [...new Set", f"const ms = i < {len(notes)} ? [{notes}[i]] : [...new Set")
         route.fulfill(response=response, body=html[:start] + body + html[end:])
 
     pg.route("**/test.html", excerpt)
+
+
+def jouer_rapide(b, url):
+    """Cinq notes espacées de 180 ms avancent de cinq positions."""
+    pg = new_page(b)
+    practice_excerpt(pg, [60, 63, 66, 69, 72])
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
     assert pg.inner_text("#prNeed").split() == ["C4"]
     pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('6 /')", timeout=6500)
     assert pg.text_content("#prHeardN").split() == ["C5"]
+    return pg
+
+
+def notes_tenues_wav():
+    return chords_wav(
+        "musitone_notes_tenues.wav",
+        {"C4": ("C4", 0, 0.65), "A4": ("A4", 0, 0.10)},
+        [(2000, ["C4"]), (2300, ["A4"])],
+    )
+
+
+def jouer_notes_tenues(b, url):
+    """Une attaque douce avance sur un Do tenu. Un La tenu ne valide pas la répétition."""
+    pg = new_page(b)
+    practice_excerpt(pg, [60, 69, 69])
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('3 /')", timeout=6500)
+    assert pg.text_content("#prHeardN").split() == ["A4"]
+    pg.wait_for_timeout(1100)
+    assert pg.text_content("#prPos").startswith("3 /")
     return pg
 
 
@@ -643,7 +658,7 @@ def jouer_allegretto(b, url):
     pg.wait_for_function("document.querySelectorAll('#prNeed .matched').length === 2", timeout=5000)
     assert pg.locator("#prNeed .matched").all_text_contents() == ["G3", "B4"]
     assert pg.locator("#prNeed [data-note='67']:not(.matched)").is_visible()
-    assert not pg.is_visible("#prHeard")
+    assert sorted(pg.locator("#prHeardN span:visible").all_text_contents()) == ["B4", "G3"]
     pg.wait_for_timeout(1600)
     assert pg.inner_text("#prPos").startswith("1 /")
     pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=6500)
@@ -756,12 +771,13 @@ jouer_octave_mains.mic = octave_mains_wav
 jouer_deux_notes.mic = deux_notes_wav
 
 jouer_rapide.mic = rapide_wav
+jouer_notes_tenues.mic = notes_tenues_wav
 jouer_justesse.mic = justesse_wav
 jouer_octave_libre.mic = lambda: justesse_wav(3)
 jouer_micro.mic = micro_wav
 jouer_micro_relance.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_relance, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, jouer_interface, jouer_details_partition, jouer_ligne, jouer_accord_resonant, structure]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_relance, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_notes_tenues, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, jouer_interface, jouer_details_partition, jouer_ligne, jouer_accord_resonant, structure]
 
 
 def main():

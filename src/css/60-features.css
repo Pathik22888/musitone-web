@@ -1096,8 +1096,7 @@ body.keymode .kmBar .kmBtns {
   align-items: center;
   gap: 8px;
 }
-.prTools select,
-.prTools button {
+.prTools select {
   min-height: 36px;
   display: flex;
   align-items: center;
@@ -1108,11 +1107,9 @@ body.keymode .kmBar .kmBtns {
   color: #e2e7fa;
   font: 700 12px Figtree, system-ui, sans-serif;
 }
-.prTools button::after {
-  content: "⌄" / "";
-}
-.prTools button[aria-expanded="true"]::after {
-  content: "⌃" / "";
+.prTools small {
+  color: #c9cfe8;
+  font-size: 12px;
 }
 .prDiagnostics {
   display: grid;
@@ -1122,15 +1119,18 @@ body.keymode .kmBar .kmBtns {
   padding: 8px 0;
   border-block: 1px solid #303858;
 }
-.prDiagnostics[hidden] {
-  display: none;
-}
 .prDiagnostics .prHeard {
   margin-left: 0;
   justify-items: start;
+  min-width: 0;
 }
 .prDiagnostics .prHeardN {
   flex-wrap: wrap;
+}
+.prDiagnostics .prHeardN span {
+  min-width: 34px;
+  padding: 4px 5px;
+  font-size: 16px;
 }
 .prNeed span.matched {
   box-shadow: inset 0 0 0 2px #243051;

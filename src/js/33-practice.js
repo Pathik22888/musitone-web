@@ -71,9 +71,9 @@ function prOpen() {
     <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div></div>
     <div class="prTools">
       <label><select id="prHands" aria-label="Main à travailler"><option value="both">Les deux mains</option><option value="r">Main droite</option><option value="l">Main gauche</option></select></label>
-      <button type="button" id="prDetailsLabel" aria-expanded="false" aria-controls="prDetails">Détails du micro</button>
+      <small id="prExtra"></small>
     </div>
-    <div id="prDetails" class="prDiagnostics" hidden>
+    <div id="prDetails" class="prDiagnostics">
       <div class="prHeard" id="prHeard"><small>J’entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div>
       <div id="prTune" class="prTune">
         <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>
@@ -86,10 +86,6 @@ function prOpen() {
 
     $("prX").onclick = prClose;
     $("prMic").onclick = prMicStart;
-    $("prDetailsLabel").onclick = () => {
-      prDetailsOpen($("prDetails").hidden);
-      prShow(false);
-    };
     $("prPrev").onclick = () => {
       PR.k = Math.max(0, PR.k - 1);
       PR.tap = null;
@@ -110,7 +106,6 @@ function prOpen() {
   }
   P.hidden = false;
   $("prHands").value = PR.hand;
-  prDetailsOpen(false);
   prShow();
   prMicStart();
 }
@@ -172,23 +167,17 @@ async function prNext(good) {
   }
   prShow();
 }
-function prDetailsOpen(open) {
-  $("prDetails").hidden = !open;
-  $("prDetailsLabel").setAttribute("aria-expanded", open);
-}
-function prShow(refreshNotes = true) {
+function prShow() {
   const g = PR.G[PR.k];
   if (!g) return;
-  if (refreshNotes) {
-    $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
-    $("prDetailsLabel").textContent = "Détails du micro";
-    $("prNeed").innerHTML = g.ms
-      .map(m => {
-        const pc = ((m % 12) + 12) % 12;
-        return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
-      })
-      .join("");
-  }
+  $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
+  $("prExtra").textContent = "";
+  $("prNeed").innerHTML = g.ms
+    .map(m => {
+      const pc = ((m % 12) + 12) % 12;
+      return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
+    })
+    .join("");
   try {
     drawMarks();
     const c = $("ov").getContext("2d"),
@@ -341,6 +330,7 @@ async function prMicStart() {
       } else if (!PR.raf) {
         mic.silentSince = null;
         mic.silent = false;
+        mic.accepted = false;
         PR.tr = pitchTracker(context.sampleRate, an.fftSize);
         prMicStatus("J'écoute votre piano", "live");
         prLoop();
@@ -401,13 +391,14 @@ function prLoop() {
     }
   }
   const expected = PR.G[PR.k]?.ms;
-  const r = PR.tr.feed(PR.fb, rms, now, expected, PR.onsetBins);
+  const r = PR.tr.feed(PR.fb, rms, now, expected, PR.onsetBins, mic.accepted);
   if (r.finished?.length && PR.target === PR.G[PR.k]) {
     const heard = r.finished[0];
     PR.tune = {heard, until: now + 2500};
     prTuning(null);
     prHeard(r.finished);
-    if (prJudge(r.finished)) prNext(true);
+    mic.accepted = prJudge(r.finished);
+    if (mic.accepted) prNext(true);
     else prWrong();
   }
   if (r.hit) PR.target = PR.G[PR.k];
@@ -439,7 +430,7 @@ function prMarkHeard(notes) {
     chip.setAttribute("aria-label", chip.textContent + (matched.has(chip) ? " reconnue" : " à jouer"));
   }
   const extra = remaining.length;
-  $("prDetailsLabel").textContent = extra ? (extra === 1 ? "1 note en trop" : extra + " notes en trop") : "Détails du micro";
+  $("prExtra").textContent = extra ? (extra === 1 ? "1 note en trop" : extra + " notes en trop") : "";
 }
 
 function prHeard(notes) {
