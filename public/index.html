@@ -5797,8 +5797,8 @@ body.keymode .kmBar .kmBtns {
   flex-wrap: wrap;
 }
 .prNeed span {
-  min-width: 54px;
-  padding: 8px 12px;
+  min-width: 45px;
+  padding: 6px 8px;
   border-radius: 14px;
   background: var(--c);
   color: #151a3b;
@@ -5918,26 +5918,74 @@ body.keymode .kmBar .kmBtns {
     transform: translateX(6px);
   }
 }
-.prHands {
+.prTools {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
 }
-.prHands button {
-  flex: 1;
+.prTools select,
+.prTools summary {
   min-height: 36px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: transparent;
-  color: #c9cfe8;
-  font:
-    700 12.5px Figtree,
-    system-ui,
-    sans-serif;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid #465271;
+  border-radius: 9px;
+  background: #171e39;
+  color: #e2e7fa;
+  font: 700 12px Figtree, system-ui, sans-serif;
 }
-.prHands button.cur {
-  background: #fff;
-  color: #151a3b;
-  border-color: #fff;
+.prTools summary {
+  cursor: pointer;
+}
+.prTools summary::after {
+  content: "⌄";
+  margin-left: 8px;
+}
+.prTools details[open] summary::after {
+  content: "⌃";
+}
+.prDiagnostics {
+  position: absolute;
+  max-width: calc(100% - 28px);
+  bottom: calc(100% + 8px);
+  left: 14px;
+  display: grid;
+  gap: 9px;
+  padding: 10px 12px;
+  min-width: min(280px, calc(100vw - 28px));
+  background: #171e39;
+  border: 1px solid #465271;
+  border-radius: 12px;
+}
+.prDiagnostics .prHeard {
+  margin-left: 0;
+  justify-items: start;
+}
+.prDiagnostics .prHeardN {
+  flex-wrap: wrap;
+}
+.prNeed span.matched {
+  box-shadow: inset 0 0 0 2px #243051;
+}
+.prNeed span.matched::after {
+  content: "✓";
+  margin-left: 5px;
+  font-size: 13px;
+}
+.dock #dPrac {
+  background: var(--ink);
+  color: var(--paper);
+}
+body.working .advIn {
+  max-height: 70dvh;
+  overflow-y: auto;
+}
+body:not(.mxv) #vsw,
+body:not(.working) #scoreView,
+body.mxv #scoreView,
+body.keymode #scoreView {
+  display: none;
 }
 .prKeys {
   position: relative;
@@ -6044,6 +6092,9 @@ body.keymode .kmBar .kmBtns {
   <details class="adv"><summary class="rb2" aria-label="Plus d’options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></summary><div class="advIn">
     <label class="btn" style="justify-content:flex-start">＋ Ajouter une page<input type="file" id="fileAdd" accept="image/*" multiple aria-label="Ajouter une page"></label>
     <label class="btn" style="justify-content:flex-start">Nouvelle partition<input type="file" id="file2" multiple aria-label="Nouvelle partition"></label>
+    <button type="button" id="scoreView">Vue MusiTone</button>
+    <button type="button" id="expPng">Exporter…</button>
+    <button id="fzorig" class="orig" aria-label="Maintenir pour voir l’original"><span>Voir l’original</span></button>
     <button id="expPdf" hidden>Exporter en PDF</button>
     <button id="toMx" hidden>Créer la partition MusiTone</button>
     <button id="toMid" hidden>Exporter en MIDI</button>
@@ -6106,7 +6157,7 @@ body.keymode .kmBar .kmBtns {
     <button id="mxqOpt" class="mxqOpt" type="button" aria-label="Réglages de la partition MusiTone"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></button><div class="mxq" id="mxq" hidden><div class="mxqBar"><span id="mxqTs"></span><span id="mxqMpp"></span><span class="mxqTempo"><button id="mxqSlow" type="button" aria-label="Plus lent">−</button><span class="mxqBpm"><b id="mxqBpm">80</b><small>bpm</small></span><button id="mxqFast" type="button" aria-label="Plus vite">+</button></span><span class="mxqAct"><button id="mxqPdf">PDF A4</button><button id="mxqSave">Garder</button></span></div><div class="mxqMsg" id="mxqMsg"></div><div class="mxqStage" id="mxqStage"><canvas id="mxqC"></canvas><canvas id="mxqHi"></canvas><div id="mxqCur"></div><button id="mxqPrevP" class="mxqNav l" aria-label="Page précédente">‹</button><button id="mxqNextP" class="mxqNav r" aria-label="Page suivante">›</button><div class="mxqDots" id="mxqDots" hidden></div></div><div class="mxqSeekRow"><button id="mxqBack" type="button" aria-label="Mesure précédente"><svg viewBox="0 0 24 24"><path d="M11 6 5 12l6 6M19 6l-6 6 6 6"/></svg></button><input type="range" id="mxqSeek" min="0" max="1000" value="0" aria-label="Position dans le morceau"><button id="mxqFwd" type="button" aria-label="Mesure suivante"><svg viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M5 6l6 6-6 6"/></svg></button><span id="mxqPos" class="mxqPos"></span><button id="mxqPlay" class="mxqFab" aria-label="Écouter"><svg viewBox="0 0 24 24" class="pl"><path d="M8 5.5v13l10.5-6.5Z"/></svg><svg viewBox="0 0 24 24" class="st"><rect x="6.5" y="5.5" width="4" height="13" rx="1.3"/><rect x="13.5" y="5.5" width="4" height="13" rx="1.3"/></svg></button></div><div id="mxqPages" hidden></div></div>
     <div class="view" id="view">
       <div class="stage" id="stage"><canvas id="cv"></canvas><canvas id="hi" aria-hidden="true"></canvas><canvas id="ov"></canvas><div id="chips"></div></div></div>
-      <div class="plBar modePanel" id="plBar" role="region" aria-labelledby="plTitle"><div class="modeHead"><b id="plTitle">Lecture</b><button id="plStop" type="button" class="modeDone">Terminé</button></div><div class="plSeekRow"><button id="plBack" type="button" aria-label="Mesure précédente"><svg viewBox="0 0 24 24"><path d="M11 6 5 12l6 6M19 6l-6 6 6 6"/></svg></button><input type="range" id="plSeek" min="0" max="1000" value="0" aria-label="Position dans le morceau"><button id="plFwd" type="button" aria-label="Mesure suivante"><svg viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M5 6l6 6-6 6"/></svg></button><span id="plPos" class="mxqPos"></span></div><button id="plPause" aria-label="Pause ou reprise"><svg class="pz" viewBox="0 0 24 24"><rect x="6.5" y="5.5" width="4" height="13" rx="1.3"/><rect x="13.5" y="5.5" width="4" height="13" rx="1.3"/></svg><svg class="pl" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5Z"/></svg></button><div class="plT"><button id="plSlow" aria-label="Plus lent">−</button><span><b id="plTempo">80</b><small>battements / min</small></span><button id="plFast" aria-label="Plus vite">+</button></div><button id="plMid" class="plMid">MIDI</button><button id="plMx" class="plMid">MusiTone</button></div><div class="dock" id="dock"><button id="fzorig" class="orig" aria-label="Maintenir pour voir l’original"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Original</span></button><button id="dPlay"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg><span>Écouter</span></button><button id="dPrac"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 6v7M12 6v7M16 6v7"/></svg><span>Jouer</span></button><button id="dFix"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg><span>Corriger</span></button><button id="expPng" class="pri share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg><span>Exporter</span></button></div>
+      <div class="plBar modePanel" id="plBar" role="region" aria-labelledby="plTitle"><div class="modeHead"><b id="plTitle">Lecture</b><button id="plStop" type="button" class="modeDone">Terminé</button></div><div class="plSeekRow"><button id="plBack" type="button" aria-label="Mesure précédente"><svg viewBox="0 0 24 24"><path d="M11 6 5 12l6 6M19 6l-6 6 6 6"/></svg></button><input type="range" id="plSeek" min="0" max="1000" value="0" aria-label="Position dans le morceau"><button id="plFwd" type="button" aria-label="Mesure suivante"><svg viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M5 6l6 6-6 6"/></svg></button><span id="plPos" class="mxqPos"></span></div><button id="plPause" aria-label="Pause ou reprise"><svg class="pz" viewBox="0 0 24 24"><rect x="6.5" y="5.5" width="4" height="13" rx="1.3"/><rect x="13.5" y="5.5" width="4" height="13" rx="1.3"/></svg><svg class="pl" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5Z"/></svg></button><div class="plT"><button id="plSlow" aria-label="Plus lent">−</button><span><b id="plTempo">80</b><small>battements / min</small></span><button id="plFast" aria-label="Plus vite">+</button></div><button id="plMid" class="plMid">MIDI</button><button id="plMx" class="plMid">MusiTone</button></div><div class="dock" id="dock"><button id="dPlay"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg><span>Écouter</span></button><button id="dPrac"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 6v7M12 6v7M16 6v7"/></svg><span>Jouer</span></button><button id="dFix"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg><span>Corriger</span></button></div>
       <div class="busy" id="busy"><div class="ld"><div class="ldKeys"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><b class="ldB" style="left:23px"></b><b class="ldB" style="left:45px"></b><b class="ldB" style="left:89px"></b><b class="ldB" style="left:111px"></b><b class="ldB" style="left:133px"></b></div><b id="ldMsg">Lecture de la partition…</b><span>Quelques secondes</span></div></div>
       <canvas id="cv0"></canvas><div class="scan" id="scan"></div>
     </div>
@@ -14390,9 +14441,10 @@ setTimeout(() => {
         : `<b class="epT">Exporter la partition</b><button data-a="png">Image<small>pour l'envoyer ou l'imprimer</small></button><button data-a="pdf">PDF<small>pour imprimer</small></button><button data-a="mid">MIDI<small>pour un logiciel de musique</small></button>`;
     const r = b.getBoundingClientRect();
     m.style.left = Math.max(8, Math.min(innerWidth - 258, r.right - 250)) + "px";
-    m.style.top = "auto";
-    m.style.bottom = Math.round(innerHeight - r.top + 10) + "px";
+    document.querySelector("details.adv").open = false;
+    m.style.bottom = "auto";
     m.hidden = false;
+    m.style.top = Math.max(8, Math.min(r.bottom + 8, innerHeight - m.offsetHeight - 8)) + "px";
     m.onclick = ev => {
       const x = ev.target.closest("button");
       if (!x) return;
@@ -19894,6 +19946,7 @@ $("sfBtn").onclick = () => {
   } catch (e) {}
   staffFit();
 };
+$("scoreView").onclick = () => setView("m");
 $("vsw").onclick = e => {
   const b = e.target.closest("button[data-v]");
   if (b) setView(b.dataset.v);
@@ -20699,13 +20752,19 @@ function prOpen() {
     P.setAttribute("aria-labelledby", "prTitle");
     P.innerHTML = `<div class="modeHead"><b id="prTitle">Jouer</b><button type="button" id="prX" class="modeDone">Terminé</button></div>
     <div class="prTop"><button type="button" class="prMic" id="prMic" title="Relancer le micro"><i></i><b id="prMicT" aria-live="polite">Micro…</b></button><span class="prPos" id="prPos"></span></div>
-    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div><div class="prHeard" id="prHeard"><small>J'entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div></div>
+    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div></div>
+    <div class="prTools">
+      <label><select id="prHands" aria-label="Main à travailler"><option value="both">Les deux mains</option><option value="r">Main droite</option><option value="l">Main gauche</option></select></label>
+      <details id="prDetails"><summary id="prDetailsLabel">Détails du micro</summary>
+        <div class="prDiagnostics"><div class="prHeard" id="prHeard"><small>J’entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div>
     <div id="prTune" class="prTune">
       <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>
       <div class="prTuneScale" aria-hidden="true"><i></i><b id="prTuneMark" hidden></b></div>
       <div class="prTuneLabels" aria-hidden="true"><span>Grave</span><span>Juste</span><span>Aigu</span></div>
     </div>
-    <div class="prHands" id="prHands"><button data-h="both" class="cur">Les deux mains</button><button data-h="r">Main droite</button><button data-h="l">Main gauche</button></div>
+        </div>
+      </details>
+    </div>
     <div class="prNav"><button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button><button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button></div>`;
     document.body.appendChild(P);
 
@@ -20717,13 +20776,9 @@ function prOpen() {
       prShow();
     };
     $("prSkip").onclick = () => prNext(false);
-    $("prHands").onclick = e => {
-      const b = e.target.closest("[data-h]");
-      if (!b) return;
-      PR.hand = b.dataset.h;
-      $("prHands")
-        .querySelectorAll("button")
-        .forEach(x => x.classList.toggle("cur", x === b));
+    $("prHands").onchange = e => {
+      PR.hand = e.target.value;
+      PR.tap = null;
       const t = PR.G[PR.k] ? PR.G[PR.k].t : 0;
       PR.G = prGroups();
       PR.k = Math.max(
@@ -20734,6 +20789,8 @@ function prOpen() {
     };
   }
   P.hidden = false;
+  $("prHands").value = PR.hand;
+  $("prDetails").open = false;
   prShow();
   prMicStart();
 }
@@ -20799,10 +20856,11 @@ function prShow() {
   const g = PR.G[PR.k];
   if (!g) return;
   $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
+  $("prDetailsLabel").textContent = "Détails du micro";
   $("prNeed").innerHTML = g.ms
     .map(m => {
       const pc = ((m % 12) + 12) % 12;
-      return `<span class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
+      return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
     })
     .join("");
   try {
@@ -20901,6 +20959,7 @@ async function prMicStart() {
   clearTimeout(PR.heardT);
   panel.classList.remove("on");
   $("prHeardN").innerHTML = "<em>—</em>";
+  prMarkHeard([]);
   prTuning(null);
   if (!navigator.mediaDevices?.getUserMedia) {
     prMicStatus("Micro indisponible sur cet appareil", "off");
@@ -21036,10 +21095,32 @@ function prLoop() {
     if (cents !== null) prTuning(cents, tune.heard);
   }
 }
-/* Affiche la note entendue et son octave. La couleur confirme le nom de la note. */
+/* Chaque note entendue valide une seule pastille. Donner la priorité à l'octave exacte. */
+function prMarkHeard(notes) {
+  const chips = [...$("prNeed").querySelectorAll("[data-note]")];
+  const remaining = [...notes];
+  const matched = new Set();
+  for (const same of [(a, b) => a === b, (a, b) => a % 12 === b % 12]) {
+    for (const chip of chips) {
+      if (matched.has(chip)) continue;
+      const i = remaining.findIndex(m => same(m, Number(chip.dataset.note)));
+      if (i < 0) continue;
+      matched.add(chip);
+      remaining.splice(i, 1);
+    }
+  }
+  for (const chip of chips) {
+    chip.classList.toggle("matched", matched.has(chip));
+    chip.setAttribute("aria-label", chip.textContent + (matched.has(chip) ? " reconnue" : " à jouer"));
+  }
+  const extra = remaining.length;
+  $("prDetailsLabel").textContent = extra ? (extra === 1 ? "1 note en trop" : extra + " notes en trop") : "Détails du micro";
+}
+
 function prHeard(notes) {
   const box = $("prHeardN");
   if (!box) return;
+  prMarkHeard(notes);
   const pcs = PR.G[PR.k]?.pcs ?? [];
   box.innerHTML = notes
     .map(m => {

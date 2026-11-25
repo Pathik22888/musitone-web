@@ -68,13 +68,19 @@ function prOpen() {
     P.setAttribute("aria-labelledby", "prTitle");
     P.innerHTML = `<div class="modeHead"><b id="prTitle">Jouer</b><button type="button" id="prX" class="modeDone">Terminé</button></div>
     <div class="prTop"><button type="button" class="prMic" id="prMic" title="Relancer le micro"><i></i><b id="prMicT" aria-live="polite">Micro…</b></button><span class="prPos" id="prPos"></span></div>
-    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div><div class="prHeard" id="prHeard"><small>J'entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div></div>
+    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div></div>
+    <div class="prTools">
+      <label><select id="prHands" aria-label="Main à travailler"><option value="both">Les deux mains</option><option value="r">Main droite</option><option value="l">Main gauche</option></select></label>
+      <details id="prDetails"><summary id="prDetailsLabel">Détails du micro</summary>
+        <div class="prDiagnostics"><div class="prHeard" id="prHeard"><small>J’entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div>
     <div id="prTune" class="prTune">
       <div class="prTuneInfo"><small>Hauteur</small><span id="prTuneValue">—</span></div>
       <div class="prTuneScale" aria-hidden="true"><i></i><b id="prTuneMark" hidden></b></div>
       <div class="prTuneLabels" aria-hidden="true"><span>Grave</span><span>Juste</span><span>Aigu</span></div>
     </div>
-    <div class="prHands" id="prHands"><button data-h="both" class="cur">Les deux mains</button><button data-h="r">Main droite</button><button data-h="l">Main gauche</button></div>
+        </div>
+      </details>
+    </div>
     <div class="prNav"><button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button><button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button></div>`;
     document.body.appendChild(P);
 
@@ -86,13 +92,9 @@ function prOpen() {
       prShow();
     };
     $("prSkip").onclick = () => prNext(false);
-    $("prHands").onclick = e => {
-      const b = e.target.closest("[data-h]");
-      if (!b) return;
-      PR.hand = b.dataset.h;
-      $("prHands")
-        .querySelectorAll("button")
-        .forEach(x => x.classList.toggle("cur", x === b));
+    $("prHands").onchange = e => {
+      PR.hand = e.target.value;
+      PR.tap = null;
       const t = PR.G[PR.k] ? PR.G[PR.k].t : 0;
       PR.G = prGroups();
       PR.k = Math.max(
@@ -103,6 +105,8 @@ function prOpen() {
     };
   }
   P.hidden = false;
+  $("prHands").value = PR.hand;
+  $("prDetails").open = false;
   prShow();
   prMicStart();
 }
@@ -168,10 +172,11 @@ function prShow() {
   const g = PR.G[PR.k];
   if (!g) return;
   $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
+  $("prDetailsLabel").textContent = "Détails du micro";
   $("prNeed").innerHTML = g.ms
     .map(m => {
       const pc = ((m % 12) + 12) % 12;
-      return `<span class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
+      return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
     })
     .join("");
   try {
@@ -270,6 +275,7 @@ async function prMicStart() {
   clearTimeout(PR.heardT);
   panel.classList.remove("on");
   $("prHeardN").innerHTML = "<em>—</em>";
+  prMarkHeard([]);
   prTuning(null);
   if (!navigator.mediaDevices?.getUserMedia) {
     prMicStatus("Micro indisponible sur cet appareil", "off");
@@ -405,10 +411,32 @@ function prLoop() {
     if (cents !== null) prTuning(cents, tune.heard);
   }
 }
-/* Affiche la note entendue et son octave. La couleur confirme le nom de la note. */
+/* Chaque note entendue valide une seule pastille. Donner la priorité à l'octave exacte. */
+function prMarkHeard(notes) {
+  const chips = [...$("prNeed").querySelectorAll("[data-note]")];
+  const remaining = [...notes];
+  const matched = new Set();
+  for (const same of [(a, b) => a === b, (a, b) => a % 12 === b % 12]) {
+    for (const chip of chips) {
+      if (matched.has(chip)) continue;
+      const i = remaining.findIndex(m => same(m, Number(chip.dataset.note)));
+      if (i < 0) continue;
+      matched.add(chip);
+      remaining.splice(i, 1);
+    }
+  }
+  for (const chip of chips) {
+    chip.classList.toggle("matched", matched.has(chip));
+    chip.setAttribute("aria-label", chip.textContent + (matched.has(chip) ? " reconnue" : " à jouer"));
+  }
+  const extra = remaining.length;
+  $("prDetailsLabel").textContent = extra ? (extra === 1 ? "1 note en trop" : extra + " notes en trop") : "Détails du micro";
+}
+
 function prHeard(notes) {
   const box = $("prHeardN");
   if (!box) return;
+  prMarkHeard(notes);
   const pcs = PR.G[PR.k]?.pcs ?? [];
   box.innerHTML = notes
     .map(m => {

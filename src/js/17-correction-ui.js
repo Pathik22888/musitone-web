@@ -913,9 +913,10 @@ setTimeout(() => {
         : `<b class="epT">Exporter la partition</b><button data-a="png">Image<small>pour l'envoyer ou l'imprimer</small></button><button data-a="pdf">PDF<small>pour imprimer</small></button><button data-a="mid">MIDI<small>pour un logiciel de musique</small></button>`;
     const r = b.getBoundingClientRect();
     m.style.left = Math.max(8, Math.min(innerWidth - 258, r.right - 250)) + "px";
-    m.style.top = "auto";
-    m.style.bottom = Math.round(innerHeight - r.top + 10) + "px";
+    document.querySelector("details.adv").open = false;
+    m.style.bottom = "auto";
     m.hidden = false;
+    m.style.top = Math.max(8, Math.min(r.bottom + 8, innerHeight - m.offsetHeight - 8)) + "px";
     m.onclick = ev => {
       const x = ev.target.closest("button");
       if (!x) return;

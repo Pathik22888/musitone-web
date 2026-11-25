@@ -230,6 +230,7 @@ $("sfBtn").onclick = () => {
   } catch (e) {}
   staffFit();
 };
+$("scoreView").onclick = () => setView("m");
 $("vsw").onclick = e => {
   const b = e.target.closest("button[data-v]");
   if (b) setView(b.dataset.v);
