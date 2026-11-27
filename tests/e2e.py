@@ -202,8 +202,14 @@ def jouer(b, url):
     return pg
 
 
+def notes_demandees(pg):
+    return pg.locator("#prNeed [data-note]").evaluate_all(
+        "(chips) => chips.sort((a, b) => Number(a.dataset.note) - Number(b.dataset.note)).map(chip => chip.textContent)"
+    )
+
+
 def jouer_interface(b, url):
-    """Sur 360 px, les trois actions restent visibles et les réglages se déplient à la demande."""
+    """Sur 360 px, les notes sont groupées par main et les boutons flottants disparaissent."""
     pg = new_page(b)
     pg.set_viewport_size({"width": 360, "height": 780})
     open_score(pg, url, "t2.png")
@@ -216,12 +222,15 @@ def jouer_interface(b, url):
     pg.wait_for_selector("body.mxv #vsw")
     pg.click("#vsw [data-v=c]")
     pg.click("#dPrac")
-    assert pg.inner_text("#prNeed").split() == ["C3", "E3", "G3", "C4"]
+    assert notes_demandees(pg) == ["C3", "E3", "G3", "C4"]
+    assert pg.locator("#prNeed [data-hand=r] [data-note]").all_text_contents() == ["C4"]
+    assert pg.locator("#prNeed [data-hand=l] [data-note]").all_text_contents() == ["C3", "E3", "G3"]
+    assert not pg.is_visible(".viewWrap .fz")
     assert pg.locator("#prHands").input_value() == "both"
     pg.select_option("#prHands", "r")
-    assert pg.inner_text("#prNeed").split() == ["C4"]
+    assert notes_demandees(pg) == ["C4"]
     pg.select_option("#prHands", "both")
-    assert pg.inner_text("#prNeed").split() == ["C3", "E3", "G3", "C4"]
+    assert notes_demandees(pg) == ["C3", "E3", "G3", "C4"]
     assert pg.is_visible("#prHeardN") and pg.is_visible("#prTune")
     return pg
 
@@ -241,7 +250,8 @@ def jouer_details_partition(b, url):
     assert score["y"] + score["height"] <= controls["y"]
     assert controls["y"] <= details["y"] < details["y"] + details["height"] <= controls["y"] + controls["height"]
     assert pg.is_visible("#prHeardN") and pg.is_visible("#prTune")
-    assert pg.locator("#prDetailsLabel").count() == 0
+    assert not pg.is_visible("#fzhelp")
+    assert pg.locator("#prPrev").bounding_box()["y"] == pg.locator("#prHands").bounding_box()["y"]
     assert pg.locator("#prSkip").bounding_box()["y"] < controls["y"] + controls["height"]
     return pg
 
@@ -366,7 +376,7 @@ def jouer_micro(b, url):
         if (t !== last) { last = t; window.__log.push(t); } }, 50); }""")
     pg.wait_for_timeout(300)
     pg.click("#prSkip")  # 2e note de la partition : E4
-    assert pg.inner_text("#prNeed").split() == ["E4"]
+    assert notes_demandees(pg) == ["E4"]
     pg.wait_for_timeout(9500)
     log = pg.evaluate("window.__log")
     assert any(l.startswith("E4 @ 3 /") for l in log), log  # E4 entendu, on passe à la note 3
@@ -411,7 +421,7 @@ def jouer_micro_relance(b, url):
     }""")
     assert "arrêté" in pg.inner_text("#prMicT")
     pg.click("#prSkip")
-    assert pg.inner_text("#prNeed").split() == ["E4"]
+    assert notes_demandees(pg) == ["E4"]
     pg.click("#prMic")
     pg.wait_for_selector("#prMic.live")
     assert pg.evaluate("testTracks.map(t => t.readyState)") == ["ended", "live"]
@@ -437,7 +447,7 @@ def verifier_justesse(b, url, note):
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
     pg.click("#prSkip")
-    assert pg.inner_text("#prNeed").split() == ["E4"]
+    assert notes_demandees(pg) == ["E4"]
     pg.wait_for_function("document.querySelector('#prTuneValue').textContent.includes('Trop aigu')", timeout=6000)
     text = pg.inner_text("#prTuneValue")
     assert text.startswith(note) and "(+" in text, text
@@ -474,7 +484,7 @@ def practice_excerpt(pg, notes):
         end = html.index("const prName", start)
         body = html[start:end]
         body = body.replace(".map(([k, evs]) => {", ".map(([k, evs], i) => {")
-        body = body.replace("const ms = [...new Set", f"const ms = i < {len(notes)} ? [{notes}[i]] : [...new Set")
+        body = body.replace("const ms = [...new Set", f"const ms = i < {len(notes)} ? {notes}[i] : [...new Set")
         route.fulfill(response=response, body=html[:start] + body + html[end:])
 
     pg.route("**/test.html", excerpt)
@@ -483,10 +493,10 @@ def practice_excerpt(pg, notes):
 def jouer_rapide(b, url):
     """Cinq notes espacées de 180 ms avancent de cinq positions."""
     pg = new_page(b)
-    practice_excerpt(pg, [60, 63, 66, 69, 72])
+    practice_excerpt(pg, [[60], [63], [66], [69], [72]])
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
-    assert pg.inner_text("#prNeed").split() == ["C4"]
+    assert notes_demandees(pg) == ["C4"]
     pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('6 /')", timeout=6500)
     assert pg.text_content("#prHeardN").split() == ["C5"]
     return pg
@@ -503,13 +513,40 @@ def notes_tenues_wav():
 def jouer_notes_tenues(b, url):
     """Une attaque douce avance sur un Do tenu. Un La tenu ne valide pas la répétition."""
     pg = new_page(b)
-    practice_excerpt(pg, [60, 69, 69])
+    practice_excerpt(pg, [[60], [69], [69]])
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
     pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('3 /')", timeout=6500)
     assert pg.text_content("#prHeardN").split() == ["A4"]
     pg.wait_for_timeout(1100)
     assert pg.text_content("#prPos").startswith("3 /")
+    return pg
+
+
+def accord_doux_wav():
+    return chords_wav(
+        "musitone_accord_doux.wav",
+        {"C3": ("C3", 0, 0.45), "Fs3": ("Fs3", 0, 0.45),
+         "A4": ("A4", 0, 0.23), "Ds5": ("Ds5", 0, 0.23)},
+        [(2000, ["C3", "Fs3"]), (2025, ["Ds5"]),
+         (4800, ["C3", "Fs3"]), (4825, ["A4", "Ds5"])],
+    )
+
+
+def jouer_accord_doux(b, url):
+    """L’accord de quatre notes avance avec une main droite douce et légèrement décalée."""
+    pg = new_page(b)
+    practice_excerpt(pg, [[48, 54, 69, 75]])
+    open_score(pg, url, "t2.png")
+    pg.click("#dPrac")
+    pg.wait_for_function("document.querySelectorAll('#prHeardN span').length >= 2", timeout=4500)
+    pg.wait_for_timeout(550)
+    assert pg.text_content("#prPos").startswith("1 /")
+    try:
+        pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=6000)
+    except Exception as e:
+        raise AssertionError(pg.text_content("#prHeardN")) from e
+    assert sorted(pg.locator("#prHeardN span.ok").all_text_contents()) == ["A4", "C3", "D♯5", "F♯3"]
     return pg
 
 
@@ -534,7 +571,7 @@ def jouer_micro_bref(b, url):
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
     pg.click("#prSkip")
-    assert pg.inner_text("#prNeed").split() == ["E4"]
+    assert notes_demandees(pg) == ["E4"]
     pg.wait_for_function("document.querySelector('#prHeardN').textContent === 'E4'", timeout=5000)
     pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('3 /')", timeout=5000)
     assert pg.text_content("#prHeardN").split() == ["E4"]
@@ -588,7 +625,7 @@ def jouer_deux_mains(b, url):
     open_score(pg, url, "low.png")
     assert pg.evaluate("new Set(__mt.sn().ev.filter(e => e.t === 0).map(e => !!e.hand)).size") == 2
     pg.click("#dPrac")
-    assert pg.inner_text("#prNeed").split() == ["D3", "G3", "B3", "F4"]
+    assert notes_demandees(pg) == ["D3", "G3", "B3", "F4"]
     pg.wait_for_function("document.querySelectorAll('#prHeardN span').length === 3", timeout=9000)
     assert sorted(pg.locator("#prHeardN span").all_text_contents()) == ["B3", "D3", "F4"]
     assert pg.inner_text("#prPos").startswith("1 /")
@@ -621,7 +658,7 @@ def jouer_octave_mains(b, url):
     pg.route("**/test.html", excerpt)
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
-    assert pg.inner_text("#prNeed").split() == ["C3", "E3", "C4"]
+    assert notes_demandees(pg) == ["C3", "E3", "C4"]
     pg.wait_for_timeout(5400)  # Accord incomplet passé, avant le C4 à 6,5 s.
     assert pg.inner_text("#prPos").startswith("1 /")
     pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=6500)
@@ -654,7 +691,7 @@ def jouer_allegretto(b, url):
     pg.route("**/test.html", excerpt)
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
-    assert pg.inner_text("#prNeed").split() == ["G3", "G4", "B4"]
+    assert notes_demandees(pg) == ["G3", "G4", "B4"]
     pg.wait_for_function("document.querySelectorAll('#prNeed .matched').length === 2", timeout=5000)
     assert pg.locator("#prNeed .matched").all_text_contents() == ["G3", "B4"]
     assert pg.locator("#prNeed [data-note='67']:not(.matched)").is_visible()
@@ -691,7 +728,7 @@ def jouer_deux_notes(b, url):
     pg.route("**/test.html", excerpt)
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
-    assert pg.inner_text("#prNeed").split() == ["C3", "G3"]
+    assert notes_demandees(pg) == ["C3", "G3"]
     pg.wait_for_function("document.querySelector('#prHeardN').textContent === 'C3'", timeout=5000)
     pg.wait_for_timeout(3200)
     assert pg.inner_text("#prPos").startswith("1 /")
@@ -731,7 +768,7 @@ def jouer_accord_resonant(b, url):
     pg.route("**/test.html", excerpt)
     open_score(pg, url, "t2.png")
     pg.click("#dPrac")
-    assert pg.inner_text("#prNeed").split() == ["G3", "B3", "D4"]
+    assert notes_demandees(pg) == ["G3", "B3", "D4"]
     pg.wait_for_timeout(4600)
     assert pg.inner_text("#prPos").startswith("1 /")
     pg.wait_for_function("document.querySelector('#prPos').textContent.startsWith('2 /')", timeout=6000)
@@ -746,7 +783,7 @@ def jouer_accord(b, url):
     pg.click("#dPrac")
     for _ in range(4):
         pg.click("#prSkip")
-    assert pg.inner_text("#prNeed").split() == ["E4", "A4", "F5"]
+    assert notes_demandees(pg) == ["E4", "A4", "F5"]
     assert pg.inner_text("#prPos").startswith("5 /")
     for notes in [["E4", "A4"], ["E4", "A4", "B4", "F5"]]:
         pg.wait_for_function(
@@ -772,12 +809,13 @@ jouer_deux_notes.mic = deux_notes_wav
 
 jouer_rapide.mic = rapide_wav
 jouer_notes_tenues.mic = notes_tenues_wav
+jouer_accord_doux.mic = accord_doux_wav
 jouer_justesse.mic = justesse_wav
 jouer_octave_libre.mic = lambda: justesse_wav(3)
 jouer_micro.mic = micro_wav
 jouer_micro_relance.mic = micro_wav
 jouer_micro_bref.mic = micro_wav
-ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_relance, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_notes_tenues, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, jouer_interface, jouer_details_partition, jouer_ligne, jouer_accord_resonant, structure]
+ALL = [etapes, retour, portees, correction, cle, lecture, pages, export_pdf, jouer, jouer_micro, jouer_micro_relance, jouer_micro_bref, jouer_justesse, jouer_octave_libre, jouer_rapide, jouer_notes_tenues, jouer_accord_doux, jouer_accord, jouer_deux_mains, jouer_octave_mains, jouer_allegretto, jouer_deux_notes, jouer_interface, jouer_details_partition, jouer_ligne, jouer_accord_resonant, structure]
 
 
 def main():

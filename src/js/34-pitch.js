@@ -111,7 +111,7 @@ function harmonicIntervalEvidence(peaks, lower, other, bw, strict = true, interv
 }
 
 /* Confirme une note avec sa fondamentale et des partiels que les autres touches n'expliquent pas. */
-function quietNoteEvidence(pk, m, other, bw, allowWeak = false) {
+function quietNoteEvidence(pk, m, other, bw, allowWeak = false, dense = false) {
   const root = 440 * 2 ** ((m - 69) / 12);
   const bases = other.map(n => 440 * 2 ** ((n - 69) / 12));
   const peak = (h, min) => {
@@ -122,6 +122,7 @@ function quietNoteEvidence(pk, m, other, bw, allowWeak = false) {
         return k > 0 && Math.abs(p.f - base * k * Math.sqrt(1 + PITCH.B * k * k)) <= Math.max(bw, p.f * 0.019);
       }));
   };
+  if (dense && peak(1, 0.022) && [2, 3, 4, 5, 6, 7, 8].filter(h => peak(h, 0.023)).length >= 3) return true;
   return peak(1, 0.036) && (peak(2, 0.12) || peak(3, 0.12) || peak(4, 0.12) ||
     (allowWeak && (
       [2, 3, 4, 5, 6].filter(h => peak(h, 0.041)).length >= 2 ||
@@ -238,6 +239,17 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
       if (harmonicIntervalEvidence(pk, lower, other, sr / n)) out.push({m, s: 0});
     }
   }
+  // Plusieurs touches peuvent être masquées dans un accord à deux mains.
+  // Leurs partiels doivent rester distincts de ceux de toutes les autres touches attendues.
+  if (expected.length >= 3 && out.length && out.length < expected.length &&
+      out.every(note => expected.includes(note.m))) {
+    for (const m of expected) {
+      if (out.length >= max || m < PITCH.lo || m > PITCH.hi || out.some(note => note.m === m)) continue;
+      if (quietNoteEvidence(pk, m, expected.filter(note => note !== m), sr / n, true, expected.length >= 4)) {
+        out.push({m, s: 0});
+      }
+    }
+  }
   return out;
 }
 
@@ -326,7 +338,8 @@ function pitchTracker(sr, n) {
       } else ref.fill(0);
       // Les notes sous E2 ont besoin d'une fenêtre plus longue.
       const fast = expected?.length === 1 && expected[0] >= 40 && !!short;
-      const quickHit = short && fastAttack(short, now, fast && rms > gate);
+      const quickHit = short && fastAttack(short, now, rms > gate &&
+        (fast || (continuing && ev?.done && expected?.length > 1)));
       // Une touche douce peut apparaître pendant qu'une autre domine encore le spectre.
       // Chercher une hausse locale avant d'analyser le résidu comme toute autre attaque.
       const localHit = continuing && ev?.done && now - last > 130 && old.length > 0 && rms > gate &&
@@ -343,8 +356,11 @@ function pitchTracker(sr, n) {
       const hit = localHit || (quickHit && now - last > 90) || (rms > gate && flux > PITCH.flux && now - last > 220);
       const fastDone = ev?.fast && ev.notes.length === 1 && ev.notes[0] === expected?.[0] &&
         ev.previous.length === 1 && ev.previous[0] === ev.notes[0] && now - ev.t >= 95;
+      // Un accord complet et stable peut avancer avant la fin de la fenêtre d'écoute.
+      const chordDone = ev?.chord && now - ev.t >= 135 &&
+        ev.previous.length === ev.chord.length && ev.previous.every(m => ev.chord.includes(m));
       let finished = null;
-      if (ev && !ev.done && (hit || fastDone || now - ev.t > 260)) {
+      if (ev && !ev.done && (hit || fastDone || chordDone || now - ev.t > 260)) {
         ev.done = true;
         // Une note d'un accord peut s'éteindre avant les autres. Une estimation
         // momentanée sur la fin peut aussi confondre un partiel avec une touche.

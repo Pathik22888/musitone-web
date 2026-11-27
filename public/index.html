@@ -5128,7 +5128,7 @@ body.midiOnly #mxqTs {
   gap: 6px;
 }
 .clSeg button {
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 12px;
   justify-content: center;
   font:
@@ -5606,7 +5606,7 @@ body.editing:not(.keymode) #steps3 {
   color: #fff;
   border-radius: 18px;
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 .prPanel[hidden] {
   display: none;
@@ -5614,6 +5614,7 @@ body.editing:not(.keymode) #steps3 {
 body.working.practice .view {
   min-height: 0;
 }
+body.practice .fz,
 body.practice .dock,
 body.practice #steps3 {
   display: none !important;
@@ -5786,7 +5787,8 @@ body.keymode .kmBar .kmBtns {
 .prNow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .prNow small {
   font-size: 13px;
@@ -5795,17 +5797,30 @@ body.keymode .kmBar .kmBtns {
 }
 .prNeed {
   display: flex;
-  gap: 8px;
+  flex: 1 0 100%;
+  gap: 6px;
+}
+.prHand {
+  min-width: 0;
+  flex: 1 1 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: #191f3c;
+}
+.prHand > div {
+  display: flex;
   flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
 }
 .prNeed span {
-  min-width: 45px;
-  padding: 6px 8px;
-  border-radius: 14px;
+  min-width: 35px;
+  padding: 4px 5px;
+  border-radius: 9px;
   background: var(--c);
   color: #151a3b;
   font:
-    900 22px Figtree,
+    900 19px Figtree,
     system-ui,
     sans-serif;
   text-align: center;
@@ -5920,32 +5935,24 @@ body.keymode .kmBar .kmBtns {
     transform: translateX(6px);
   }
 }
-.prTools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.prTools select {
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
+#prHands {
+  min-width: 0;
+  padding-inline: 5px;
   border: 1px solid #465271;
   border-radius: 9px;
   background: #171e39;
   color: #e2e7fa;
   font: 700 12px Figtree, system-ui, sans-serif;
 }
-.prTools small {
-  color: #c9cfe8;
-  font-size: 12px;
+#prExtra:empty {
+  display: none;
 }
 .prDiagnostics {
   display: grid;
   grid-template-columns: minmax(65px, 1fr) minmax(125px, 1.4fr);
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
+  padding: 5px 0;
   border-block: 1px solid #303858;
 }
 .prDiagnostics .prHeard {
@@ -5966,8 +5973,8 @@ body.keymode .kmBar .kmBtns {
 }
 .prNeed span.matched::after {
   content: "✓";
-  margin-left: 5px;
-  font-size: 13px;
+  margin-left: 2px;
+  font-size: 11px;
 }
 .dock #dPrac {
   background: var(--ink);
@@ -20748,11 +20755,7 @@ function prOpen() {
     P.setAttribute("aria-labelledby", "prTitle");
     P.innerHTML = `<div class="modeHead"><b id="prTitle">Jouer</b><button type="button" id="prX" class="modeDone">Terminé</button></div>
     <div class="prTop"><button type="button" class="prMic" id="prMic" title="Relancer le micro"><i></i><b id="prMicT" aria-live="polite">Micro…</b></button><span class="prPos" id="prPos"></span></div>
-    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div></div>
-    <div class="prTools">
-      <label><select id="prHands" aria-label="Main à travailler"><option value="both">Les deux mains</option><option value="r">Main droite</option><option value="l">Main gauche</option></select></label>
-      <small id="prExtra"></small>
-    </div>
+    <div class="prNow"><div id="prNeed" class="prNeed" aria-label="Notes à jouer"></div><small id="prExtra"></small></div>
     <div id="prDetails" class="prDiagnostics">
       <div class="prHeard" id="prHeard"><small>J’entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div>
       <div id="prTune" class="prTune">
@@ -20761,7 +20764,11 @@ function prOpen() {
         <div class="prTuneLabels" aria-hidden="true"><span>Grave</span><span>Juste</span><span>Aigu</span></div>
       </div>
     </div>
-    <div class="prNav"><button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button><button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button></div>`;
+    <div class="prNav">
+      <button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button>
+      <select id="prHands" aria-label="Main à travailler"><option value="both">Les deux mains</option><option value="r">Main droite</option><option value="l">Main gauche</option></select>
+      <button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button>
+    </div>`;
     $("work").appendChild(P);
 
     $("prX").onclick = prClose;
@@ -20852,12 +20859,19 @@ function prShow() {
   if (!g) return;
   $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
   $("prExtra").textContent = "";
-  $("prNeed").innerHTML = g.ms
-    .map(m => {
-      const pc = ((m % 12) + 12) % 12;
-      return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
-    })
-    .join("");
+  const groups = {r: [], l: [], both: []};
+  for (const m of g.ms) {
+    const pc = m % 12;
+    const right = g.evs.some(e => e.m === m && !e.hand);
+    const left = g.evs.some(e => e.m === m && e.hand);
+    const hand = left ? (right ? "both" : "l") : "r";
+    groups[hand].push(`<span data-note="${m}" class="${PR.tap?.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`);
+  }
+  $("prNeed").innerHTML = [
+    ["r", "Main droite"], ["l", "Main gauche"], ["both", "Note commune"]
+  ].filter(([hand]) => groups[hand].length).map(([hand, label]) =>
+    `<div class="prHand" data-hand="${hand}"><small>${label}</small><div>${groups[hand].join("")}</div></div>`
+  ).join("");
   try {
     drawMarks();
     const c = $("ov").getContext("2d"),
@@ -20925,7 +20939,8 @@ function prFollow(pg, line, x, events) {
   const move = Math.abs(left - baseLeft) >= 1 || Math.abs(top - baseTop) >= 1;
   PR.follow = {view: v, page: pg, line, width: r.width, left, top, until: move ? now + 500 : pending?.until ?? now};
   if (move) {
-    const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth";
+    const instant = (newLine && pending) || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const behavior = instant ? "instant" : "smooth";
     v.scrollTo({left, top, behavior});
   }
 }
@@ -21081,7 +21096,17 @@ function prLoop() {
     if (mic.accepted) prNext(true);
     else prWrong();
   }
-  if (r.hit) PR.target = PR.G[PR.k];
+  if (r.hit) {
+    PR.target = PR.G[PR.k];
+    mic.preview = "";
+  }
+  if (r.live && r.notes?.length && PR.target === PR.G[PR.k]) {
+    const preview = r.notes.join(",");
+    if (preview !== mic.preview) {
+      mic.preview = preview;
+      prHeard(r.notes);
+    }
+  }
   const tune = PR.tune;
   if (tune && now >= tune.until) {
     PR.tune = null;
@@ -21268,7 +21293,7 @@ function harmonicIntervalEvidence(peaks, lower, other, bw, strict = true, interv
 }
 
 /* Confirme une note avec sa fondamentale et des partiels que les autres touches n'expliquent pas. */
-function quietNoteEvidence(pk, m, other, bw, allowWeak = false) {
+function quietNoteEvidence(pk, m, other, bw, allowWeak = false, dense = false) {
   const root = 440 * 2 ** ((m - 69) / 12);
   const bases = other.map(n => 440 * 2 ** ((n - 69) / 12));
   const peak = (h, min) => {
@@ -21279,6 +21304,7 @@ function quietNoteEvidence(pk, m, other, bw, allowWeak = false) {
         return k > 0 && Math.abs(p.f - base * k * Math.sqrt(1 + PITCH.B * k * k)) <= Math.max(bw, p.f * 0.019);
       }));
   };
+  if (dense && peak(1, 0.022) && [2, 3, 4, 5, 6, 7, 8].filter(h => peak(h, 0.023)).length >= 3) return true;
   return peak(1, 0.036) && (peak(2, 0.12) || peak(3, 0.12) || peak(4, 0.12) ||
     (allowWeak && (
       [2, 3, 4, 5, 6].filter(h => peak(h, 0.041)).length >= 2 ||
@@ -21395,6 +21421,17 @@ function pitchDetect(db, sr, n, max = 8, expected = []) {
       if (harmonicIntervalEvidence(pk, lower, other, sr / n)) out.push({m, s: 0});
     }
   }
+  // Plusieurs touches peuvent être masquées dans un accord à deux mains.
+  // Leurs partiels doivent rester distincts de ceux de toutes les autres touches attendues.
+  if (expected.length >= 3 && out.length && out.length < expected.length &&
+      out.every(note => expected.includes(note.m))) {
+    for (const m of expected) {
+      if (out.length >= max || m < PITCH.lo || m > PITCH.hi || out.some(note => note.m === m)) continue;
+      if (quietNoteEvidence(pk, m, expected.filter(note => note !== m), sr / n, true, expected.length >= 4)) {
+        out.push({m, s: 0});
+      }
+    }
+  }
   return out;
 }
 
@@ -21483,7 +21520,8 @@ function pitchTracker(sr, n) {
       } else ref.fill(0);
       // Les notes sous E2 ont besoin d'une fenêtre plus longue.
       const fast = expected?.length === 1 && expected[0] >= 40 && !!short;
-      const quickHit = short && fastAttack(short, now, fast && rms > gate);
+      const quickHit = short && fastAttack(short, now, rms > gate &&
+        (fast || (continuing && ev?.done && expected?.length > 1)));
       // Une touche douce peut apparaître pendant qu'une autre domine encore le spectre.
       // Chercher une hausse locale avant d'analyser le résidu comme toute autre attaque.
       const localHit = continuing && ev?.done && now - last > 130 && old.length > 0 && rms > gate &&
@@ -21500,8 +21538,11 @@ function pitchTracker(sr, n) {
       const hit = localHit || (quickHit && now - last > 90) || (rms > gate && flux > PITCH.flux && now - last > 220);
       const fastDone = ev?.fast && ev.notes.length === 1 && ev.notes[0] === expected?.[0] &&
         ev.previous.length === 1 && ev.previous[0] === ev.notes[0] && now - ev.t >= 95;
+      // Un accord complet et stable peut avancer avant la fin de la fenêtre d'écoute.
+      const chordDone = ev?.chord && now - ev.t >= 135 &&
+        ev.previous.length === ev.chord.length && ev.previous.every(m => ev.chord.includes(m));
       let finished = null;
-      if (ev && !ev.done && (hit || fastDone || now - ev.t > 260)) {
+      if (ev && !ev.done && (hit || fastDone || chordDone || now - ev.t > 260)) {
         ev.done = true;
         // Une note d'un accord peut s'éteindre avant les autres. Une estimation
         // momentanée sur la fin peut aussi confondre un partiel avec une touche.

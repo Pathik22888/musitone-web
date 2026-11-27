@@ -265,6 +265,28 @@ function shortSpectrum(x, end) {
   return Float32Array.from({length: shortSize / 2}, (_, i) => 20 * Math.log10(Math.hypot(re[i], im[i]) / shortSize + 1e-12));
 }
 
+// Deux accords rapprochés avec le son du premier encore présent.
+const rapidChordSeed = seed;
+const rapidChords = [[60, 63, 66], [69, 72, 75]];
+const rapidAudio = mix(rapidChords.flatMap((chord, i) =>
+  chord.map(m => [by[m], Math.round(SR * (0.4 + i * 0.21)), 0.65])
+), SR * 1.2);
+const rapidTracker = pitchTracker(SR, N);
+let rapidPos = 0, firstChordAt = Infinity;
+for (let end = N; end < rapidAudio.length && rapidPos < rapidChords.length; end += HOP) {
+  const time = end * 1000 / SR, wanted = rapidChords[rapidPos];
+  const result = rapidTracker.feed(spectrum(rapidAudio, end), rms(rapidAudio, end),
+    time, wanted, shortSpectrum(rapidAudio, end), rapidPos > 0);
+  if (result.finished?.length === wanted.length && wanted.every(m => result.finished.includes(m))) {
+    if (!rapidPos) firstChordAt = time;
+    rapidPos++;
+  }
+}
+const rapidChordsOK = rapidPos === rapidChords.length && firstChordAt < 630;
+if (!rapidChordsOK) bad.push(`Accords rapprochés : ${rapidPos}/2, premier à ${firstChordAt} ms`);
+console.log(`Accords rapprochés à 210 ms : ${rapidPos}/2`);
+seed = rapidChordSeed;
+
 const quickSequences = [[60, 63, 66, 69, 72], [72, 69, 66, 63, 60], [60, 60, 63, 63, 60], [48, 51, 54, 57, 60]];
 let quickOK = 0;
 const seedBeforeQuick = seed;
@@ -376,6 +398,6 @@ console.log(`Bruits sans note ignorés : ${nok}/${bursts.length}`);
 console.log(`Avec réverbération : ${rok}/${rtot}`);
 if (process.argv.includes("-v") || bad.length) console.log(bad.join("\n"));
 fs.rmSync(tmp, {recursive: true});
-const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && allegrettoOK === allegrettoCases.length && gNotesOK === 6 && gChordsOK === gCases.length && pairsOK === pairCases.length && pairStable && quickOK === quickSequences.length && roomOK === roomCases.length && tuningOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
+const pass = ok + oct >= tot * 0.95 && ok >= tot * 0.9 && retrig === 0 && cok >= ctot - 1 && exactChords === chordCases.length && octavesOK === 3 && allegrettoOK === allegrettoCases.length && gNotesOK === 6 && gChordsOK === gCases.length && pairsOK === pairCases.length && pairStable && rapidChordsOK && quickOK === quickSequences.length && roomOK === roomCases.length && tuningOK === 3 && sok === stot && rok === rtot && nok === bursts.length;
 console.log(pass ? "OK" : "ÉCHEC");
 process.exit(pass ? 0 : 1);

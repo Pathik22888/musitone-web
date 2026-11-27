@@ -299,7 +299,7 @@ body.midiOnly #mxqTs {
   gap: 6px;
 }
 .clSeg button {
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 12px;
   justify-content: center;
   font:
@@ -777,7 +777,7 @@ body.editing:not(.keymode) #steps3 {
   color: #fff;
   border-radius: 18px;
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 .prPanel[hidden] {
   display: none;
@@ -785,6 +785,7 @@ body.editing:not(.keymode) #steps3 {
 body.working.practice .view {
   min-height: 0;
 }
+body.practice .fz,
 body.practice .dock,
 body.practice #steps3 {
   display: none !important;
@@ -957,7 +958,8 @@ body.keymode .kmBar .kmBtns {
 .prNow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .prNow small {
   font-size: 13px;
@@ -966,17 +968,30 @@ body.keymode .kmBar .kmBtns {
 }
 .prNeed {
   display: flex;
-  gap: 8px;
+  flex: 1 0 100%;
+  gap: 6px;
+}
+.prHand {
+  min-width: 0;
+  flex: 1 1 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: #191f3c;
+}
+.prHand > div {
+  display: flex;
   flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
 }
 .prNeed span {
-  min-width: 45px;
-  padding: 6px 8px;
-  border-radius: 14px;
+  min-width: 35px;
+  padding: 4px 5px;
+  border-radius: 9px;
   background: var(--c);
   color: #151a3b;
   font:
-    900 22px Figtree,
+    900 19px Figtree,
     system-ui,
     sans-serif;
   text-align: center;
@@ -1091,32 +1106,24 @@ body.keymode .kmBar .kmBtns {
     transform: translateX(6px);
   }
 }
-.prTools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.prTools select {
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
+#prHands {
+  min-width: 0;
+  padding-inline: 5px;
   border: 1px solid #465271;
   border-radius: 9px;
   background: #171e39;
   color: #e2e7fa;
   font: 700 12px Figtree, system-ui, sans-serif;
 }
-.prTools small {
-  color: #c9cfe8;
-  font-size: 12px;
+#prExtra:empty {
+  display: none;
 }
 .prDiagnostics {
   display: grid;
   grid-template-columns: minmax(65px, 1fr) minmax(125px, 1.4fr);
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
+  padding: 5px 0;
   border-block: 1px solid #303858;
 }
 .prDiagnostics .prHeard {
@@ -1137,8 +1144,8 @@ body.keymode .kmBar .kmBtns {
 }
 .prNeed span.matched::after {
   content: "✓";
-  margin-left: 5px;
-  font-size: 13px;
+  margin-left: 2px;
+  font-size: 11px;
 }
 .dock #dPrac {
   background: var(--ink);

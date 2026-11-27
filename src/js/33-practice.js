@@ -68,11 +68,7 @@ function prOpen() {
     P.setAttribute("aria-labelledby", "prTitle");
     P.innerHTML = `<div class="modeHead"><b id="prTitle">Jouer</b><button type="button" id="prX" class="modeDone">Terminé</button></div>
     <div class="prTop"><button type="button" class="prMic" id="prMic" title="Relancer le micro"><i></i><b id="prMicT" aria-live="polite">Micro…</b></button><span class="prPos" id="prPos"></span></div>
-    <div class="prNow"><small>Jouez</small><div id="prNeed" class="prNeed"></div></div>
-    <div class="prTools">
-      <label><select id="prHands" aria-label="Main à travailler"><option value="both">Les deux mains</option><option value="r">Main droite</option><option value="l">Main gauche</option></select></label>
-      <small id="prExtra"></small>
-    </div>
+    <div class="prNow"><div id="prNeed" class="prNeed" aria-label="Notes à jouer"></div><small id="prExtra"></small></div>
     <div id="prDetails" class="prDiagnostics">
       <div class="prHeard" id="prHeard"><small>J’entends</small><div id="prHeardN" class="prHeardN"><em>—</em></div></div>
       <div id="prTune" class="prTune">
@@ -81,7 +77,11 @@ function prOpen() {
         <div class="prTuneLabels" aria-hidden="true"><span>Grave</span><span>Juste</span><span>Aigu</span></div>
       </div>
     </div>
-    <div class="prNav"><button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button><button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button></div>`;
+    <div class="prNav">
+      <button type="button" id="prPrev" aria-label="Note précédente">‹ Revenir</button>
+      <select id="prHands" aria-label="Main à travailler"><option value="both">Les deux mains</option><option value="r">Main droite</option><option value="l">Main gauche</option></select>
+      <button type="button" id="prSkip" aria-label="Passer cette note">Passer ›</button>
+    </div>`;
     $("work").appendChild(P);
 
     $("prX").onclick = prClose;
@@ -172,12 +172,19 @@ function prShow() {
   if (!g) return;
   $("prPos").textContent = `${PR.k + 1} / ${PR.G.length}` + (pages.length > 1 ? ` · page ${cur + 1}` : "");
   $("prExtra").textContent = "";
-  $("prNeed").innerHTML = g.ms
-    .map(m => {
-      const pc = ((m % 12) + 12) % 12;
-      return `<span data-note="${m}" class="${PR.tap && PR.tap.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`;
-    })
-    .join("");
+  const groups = {r: [], l: [], both: []};
+  for (const m of g.ms) {
+    const pc = m % 12;
+    const right = g.evs.some(e => e.m === m && !e.hand);
+    const left = g.evs.some(e => e.m === m && e.hand);
+    const hand = left ? (right ? "both" : "l") : "r";
+    groups[hand].push(`<span data-note="${m}" class="${PR.tap?.has(pc) ? "done" : ""}" style="--c:${prColor(pc)}">${prName(m)}</span>`);
+  }
+  $("prNeed").innerHTML = [
+    ["r", "Main droite"], ["l", "Main gauche"], ["both", "Note commune"]
+  ].filter(([hand]) => groups[hand].length).map(([hand, label]) =>
+    `<div class="prHand" data-hand="${hand}"><small>${label}</small><div>${groups[hand].join("")}</div></div>`
+  ).join("");
   try {
     drawMarks();
     const c = $("ov").getContext("2d"),
@@ -245,7 +252,8 @@ function prFollow(pg, line, x, events) {
   const move = Math.abs(left - baseLeft) >= 1 || Math.abs(top - baseTop) >= 1;
   PR.follow = {view: v, page: pg, line, width: r.width, left, top, until: move ? now + 500 : pending?.until ?? now};
   if (move) {
-    const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth";
+    const instant = (newLine && pending) || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const behavior = instant ? "instant" : "smooth";
     v.scrollTo({left, top, behavior});
   }
 }
@@ -401,7 +409,17 @@ function prLoop() {
     if (mic.accepted) prNext(true);
     else prWrong();
   }
-  if (r.hit) PR.target = PR.G[PR.k];
+  if (r.hit) {
+    PR.target = PR.G[PR.k];
+    mic.preview = "";
+  }
+  if (r.live && r.notes?.length && PR.target === PR.G[PR.k]) {
+    const preview = r.notes.join(",");
+    if (preview !== mic.preview) {
+      mic.preview = preview;
+      prHeard(r.notes);
+    }
+  }
   const tune = PR.tune;
   if (tune && now >= tune.until) {
     PR.tune = null;
